@@ -69,9 +69,26 @@ await test("full lifecycle on a timer: start/pause/resume/stop, pause excluded",
   assert.equal((await dev.view()).elapsedMs, 10_000);
   await dev.press(); tick(3_000);          // resume
   assert.equal((await dev.view()).elapsedMs, 13_000);
-  await dev.stop();
+  await dev.finish();                       // bank to history, timer idle
   assert.equal((await dev.view()).state, "ready");
   assert.equal(await dev.totalMs(card.id), 13_000);
+});
+
+await test("stop = freeze & keep (no history write); reset = discard", async () => {
+  const { dev, tick } = harness();
+  const card = await dev.createCard("Writing");
+  await dev.slot(card.id);
+  await dev.press(); tick(8_000);
+  await dev.stop();                          // freeze & keep
+  assert.equal((await dev.view()).state, "paused");      // held, not reset
+  assert.equal((await dev.view()).elapsedMs, 8_000);     // progress kept
+  assert.equal(await dev.totalMs(card.id), 0);           // NOT banked to history
+  await dev.press(); tick(2_000);            // resume from where it was
+  assert.equal((await dev.view()).elapsedMs, 10_000);
+  await dev.reset();                         // discard the run
+  assert.equal((await dev.view()).state, "ready");       // back to fresh
+  assert.equal((await dev.view()).elapsedMs, 0);
+  assert.equal(await dev.totalMs(card.id), 0);           // reset writes no history
 });
 
 await test("a card holds multiple timers up to the cap", async () => {
@@ -242,9 +259,9 @@ await test("timerTotalMs splits history by timer", async () => {
   const t1 = (await dev.listTimers(card.id))[0];
   const t2 = await dev.addTimer(card.id, { name: "Other" });
   await dev.slot(card.id);
-  await dev.press(); tick(4_000); await dev.stop();          // 4s on t1
+  await dev.press(); tick(4_000); await dev.finish();        // 4s on t1, banked
   await dev.switchTimer(t2.id);
-  await dev.press(); tick(9_000); await dev.stop();          // 9s on t2
+  await dev.press(); tick(9_000); await dev.finish();        // 9s on t2, banked
   assert.equal(await dev.timerTotalMs(t1.id), 4_000);
   assert.equal(await dev.timerTotalMs(t2.id), 9_000);
   assert.equal(await dev.totalMs(card.id), 13_000);
@@ -263,7 +280,7 @@ await test("export → import round-trips the whole dataset into a fresh store",
   const card = await dev.createCard("Hobby");
   const t2 = await dev.addTimer(card.id, { name: "Pomodoro", mode: "down", targetMs: 25 * 60000 });
   await dev.slot(card.id);
-  await dev.press(); tick(5_000); await dev.stop();      // a history session
+  await dev.press(); tick(5_000); await dev.finish();    // a history session
   await dev.switchTimer(t2.id); await dev.press();       // a live (suspended-able) session
   const dump = await dev.exportAll();
   assert.equal(dump.cards.length, 1);

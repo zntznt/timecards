@@ -306,8 +306,18 @@ try {
       out(viewLine(v), v);
       break;
     }
-    case "stop": {
+    case "stop": {                        // freeze & keep (pause, no history write)
       const v = await dev.stop();
+      out(viewLine(v), v);
+      break;
+    }
+    case "reset": case "clear": {         // discard the run, back to full / zero
+      const v = await dev.reset();
+      out(viewLine(v), v);
+      break;
+    }
+    case "finish": case "save": {         // bank the run to history, timer idle
+      const v = await dev.finish();
       out(viewLine(v), v);
       break;
     }
@@ -432,7 +442,9 @@ DEVICE
   slot <id|name> | slot --nfc <uid>              put a card in the device
   press [--down <dur>] [--up]                    the big button: start / pause / resume
                                                  (press when finished = repeat)
-  stop                                           stop & save the active timer's session
+  stop                                           freeze & keep (pause, nothing saved)
+  reset                                          discard this run, back to full / zero
+  finish                                         bank the run to history, timer idle
   repeat                                         re-run the same countdown (saves the round)
   lock | unlock                                  freeze / unfreeze the big button
   eject                                          remove the card (suspends its timer)

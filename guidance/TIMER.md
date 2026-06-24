@@ -24,9 +24,25 @@ held session is three timestamps in storage, not a live in-memory clock.
 
 `device.addTimer` enforces the 10 cap (throws past it). `device.deleteTimer` saves
 any in-progress session to history first, then removes the timer; deleting down to
-zero is allowed (the card then shows "add a timer"). `device.stop()` finalizes the
-active timer's session to history and leaves the timer idle (not deleted).
+zero is allowed (the card then shows "add a timer").
 Per-timer history totals: `device.timerTotalMs(id)`; whole-card: `device.totalMs(id)`.
+
+## Three ways to end a run — keep / discard / commit
+
+These are distinct on purpose (a common point of confusion):
+
+| method            | what it does                                         | history? |
+|-------------------|------------------------------------------------------|----------|
+| `stop()`          | **freeze & keep** — pauses and holds the run (readout stays put); resume later | no |
+| `reset()`         | **discard** — clears the run, back to full duration / zero | no |
+| `finish()`        | **commit** — banks the run to history, timer goes idle | yes |
+
+Time is banked to history ONLY when a run ends for real: a natural countdown finish,
+`repeat()` (saves the round then restarts), `deleteTimer()`, or an explicit
+`finish()`. A `stop()`-frozen or switch-suspended session is "in progress," not done,
+so it isn't in history until it actually ends. (Earlier `stop()` finalized — that
+made the countdown jump back to full and silently banked partial time; split into
+stop/reset/finish so each intent is explicit.)
 
 ## States (`RunState`)
 

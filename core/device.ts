@@ -4,7 +4,8 @@
 // Model: a Card owns up to MAX_TIMERS Timers. The slot holds one card + one active
 // timer. Each timer carries its OWN in-progress session (timer.liveSession), so
 // switching timers SUSPENDS the current one and RESUMES the target — nothing is
-// lost. Stopping finalizes the active timer's session into history.
+// lost. Finishing (or a natural countdown end / repeat / timer delete) banks the
+// active session into history; stop = freeze & keep, reset = discard.
 
 import type { Storage, Card, Timer, Session, SlotView, TimerMode, AlarmStyle, DeadlineKind, TimecardsExport } from "./types.ts";
 import { MAX_TIMERS } from "./types.ts";
@@ -285,8 +286,34 @@ export class Device {
     return this.view();
   }
 
-  /** Stop the active timer's session and save it to history. Timer stays, idle. */
+  /** Stop = freeze & keep. Pauses the active timer's run and HOLDS it (no history
+   *  write, readout stays where it is). Resume with the big button later. The run is
+   *  only banked to history when it finishes naturally, is repeated, the timer is
+   *  deleted, or you call finish(). Ignored while locked. */
   async stop(): Promise<SlotView> {
+    const slot = await this.store.getSlot();
+    if (slot.locked || !slot.activeTimerId) return this.view();
+    const timer = await this.store.getTimer(slot.activeTimerId);
+    if (timer?.liveSession && timer.liveSession.pausedAt === null && timer.liveSession.endedAt === null) {
+      await this.store.putTimer({ ...timer, liveSession: T.pause(timer.liveSession, this.now()) });
+    }
+    return this.view();
+  }
+
+  /** Reset = discard the current run. Clears the active timer's session WITHOUT
+   *  writing it to history, so a countdown returns to its full duration / a
+   *  stopwatch to zero. Ignored while locked. */
+  async reset(): Promise<SlotView> {
+    const slot = await this.store.getSlot();
+    if (slot.locked || !slot.activeTimerId) return this.view();
+    const timer = await this.store.getTimer(slot.activeTimerId);
+    if (timer?.liveSession) await this.store.putTimer({ ...timer, liveSession: null }); // no finalize
+    return this.view();
+  }
+
+  /** Finish = bank the current run to history and clear it (the timer goes idle,
+   *  ready for a fresh start). The explicit "this run is done, save it" action. */
+  async finish(): Promise<SlotView> {
     const slot = await this.store.getSlot();
     if (slot.locked || !slot.activeTimerId) return this.view();
     const timer = await this.store.getTimer(slot.activeTimerId);

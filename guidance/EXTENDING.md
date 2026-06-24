@@ -46,11 +46,26 @@ create table cards (
   category   text,
   color      text,
   nfc_uid    text unique,
-  created_at bigint not null          -- epoch ms (matches the model)
+  created_at bigint not null,          -- epoch ms (matches the model)
+  last_timer_id text,
+  deadline      bigint,
+  deadline_kind text
+);
+create table timers (                  -- a card owns up to 10 of these
+  id          text primary key,
+  card_id     text not null references cards(id) on delete cascade,
+  name        text not null,
+  mode        text not null,           -- 'up' | 'down'
+  target_ms   bigint,
+  alarm_style text not null,           -- 'chime' | 'blip' | 'silent'
+  live_session jsonb,                  -- held in-progress session, or null
+  ord         int not null,
+  created_at  bigint not null
 );
 create table sessions (
   id         text primary key,
   card_id    text not null references cards(id) on delete cascade,
+  timer_id   text,                     -- which timer this history belongs to
   mode       text not null,
   target_ms  bigint,
   started_at bigint not null,
@@ -61,10 +76,14 @@ create table sessions (
 create table slot (                    -- single row, id always 0
   id      int primary key default 0 check (id = 0),
   card_id text,
-  session jsonb
+  active_timer_id text,
+  locked  boolean not null default false
 );
 insert into slot (id) values (0) on conflict do nothing;
 ```
+
+`SupabaseStore` implements the same 12 `Storage` methods (cards, timers, sessions,
+slot) — each one query. Same row↔model mapping as `core/sqlite-store.ts`.
 
 For multi-user later: add a `user_id` column to each table + Row Level Security
 policies keyed on `auth.uid()`. Single-user BYO-project needs none of that.

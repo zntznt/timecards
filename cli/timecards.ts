@@ -20,7 +20,7 @@
 import { Device, slugify } from "../core/device.ts";
 import { SqliteStore } from "../core/sqlite-store.ts";
 import { fmtDuration } from "../core/format.ts";
-import type { SlotView, Card, TimerMode, AlarmStyle, DeadlineKind } from "../core/types.ts";
+import type { SlotView, Card, Timer, TimerMode, AlarmStyle, DeadlineKind } from "../core/types.ts";
 
 // ── arg parsing (tiny, no dependency) ───────────────────────────
 const argv = process.argv.slice(2);
@@ -62,24 +62,41 @@ function dayCountLabel(v: SlotView): string {
 function viewLine(v: SlotView): string {
   const lock = v.locked ? "  🔒" : "";
   if (v.state === "empty") return "[ empty slot ]  — slot a card with: timecards slot <id>";
-  const name = v.card!.name;
+  const card = v.card!.name;
+  const tname = v.timer ? ` / ${v.timer.name}` : " (no timers — add one)";
+  const head = `[ ${card}${tname} ]`;
   const dc = dayCountLabel(v);
-  if (v.state === "ready") return `[ ${name} ]  ready  — press to start${dc}${lock}`;
+  if (!v.timer) return `${head}${dc}${lock}`;
+  if (v.state === "ready") return `${head}  ready  — press to start${dc}${lock}`;
   if (v.mode === "down") {
     const tag = v.finished ? `DONE 🔔(${v.alarmStyle})` : v.state.toUpperCase();
-    return `[ ${name} ]  ${tag}  ${fmtDuration(v.remainingMs ?? 0)} left${dc}${lock}`;
+    return `${head}  ${tag}  ${fmtDuration(v.remainingMs ?? 0)} left${dc}${lock}`;
   }
-  return `[ ${name} ]  ${v.state.toUpperCase()}  ${fmtDuration(v.elapsedMs, true)}${dc}${lock}`;
+  return `${head}  ${v.state.toUpperCase()}  ${fmtDuration(v.elapsedMs, true)}${dc}${lock}`;
 }
 
-function cardLine(c: Card, active: string | null, totalMs: number): string {
+function cardLine(c: Card, active: string | null, totalMs: number, timerCount: number): string {
   const mark = c.id === active ? "▶" : " ";
   const cat = c.category ? `  (${c.category})` : "";
   const nfc = c.nfcUid ? `  nfc:${c.nfcUid}` : "";
-  const mode = c.defaultMode === "down" && c.defaultTargetMs
-    ? `  ⏲ ${fmtDuration(c.defaultTargetMs)} countdown` : "";
+  const tc = `  ⏲ ${timerCount} timer${timerCount === 1 ? "" : "s"}`;
   const dl = c.deadline ? `  ⏰ ${(c.deadlineKind ?? "until") === "until" ? "until" : "since"}` : "";
-  return `${mark} ${c.id.padEnd(16)} ${c.name}${cat}  —  ${fmtDuration(totalMs)} total${mode}${dl}${nfc}`;
+  return `${mark} ${c.id.padEnd(16)} ${c.name}${cat}  —  ${fmtDuration(totalMs)} total${tc}${dl}${nfc}`;
+}
+
+function timerLine(t: Timer, activeId: string | null | undefined, totalMs: number): string {
+  const mark = t.id === activeId ? "▶" : " ";
+  const cfg = t.mode === "down" && t.targetMs ? `⏲ ${fmtDuration(t.targetMs)}` : "stopwatch";
+  const live = t.liveSession ? (t.liveSession.pausedAt !== null ? " ⏸ held" : " ▶ running") : "";
+  return `${mark} ${t.name.padEnd(18)} ${cfg.padEnd(12)} ${fmtDuration(totalMs)} total  🔔${t.alarmStyle}${live}`;
+}
+
+/** Resolve a user-typed timer ref (name or id) within a card. */
+async function resolveTimer(dev: Device, cardId: string, q: string): Promise<Timer> {
+  const timers = await dev.listTimers(cardId);
+  const hit = timers.find(t => t.id === q) ?? timers.find(t => t.name.toLowerCase() === q.toLowerCase());
+  if (!hit) die(`no timer "${q}" on card ${cardId}`);
+  return hit;
 }
 
 /** Parse a "HH:MM", "MM", or plain minutes string into ms. "25"→25min, "1:30:00"→1h30m. */
@@ -129,22 +146,77 @@ try {
       break;
     }
     case "config": case "set": {
-      const id = await resolveCardId(dev, need("config <id> [--down <dur>|--up] [--alarm X] [--deadline YYYY-MM-DD] [--since|--until] [--no-deadline]"));
-      const down = pullOpt("--down");
-      const up = pullFlag("--up");
-      const alarm = pullOpt("--alarm") as AlarmStyle | undefined;
+      // Card-level config: deadline / category / color. (Timer config lives under `timer`.)
+      const id = await resolveCardId(dev, need("config <id> [--deadline YYYY-MM-DD] [--since|--until] [--no-deadline] [--category X] [--color #abc]"));
       const deadlineStr = pullOpt("--deadline");
       const since = pullFlag("--since");
       const until = pullFlag("--until");
       const clearDeadline = pullFlag("--no-deadline");
       const card = await dev.configureCard(id, {
-        defaultMode: up ? "up" : down ? "down" : undefined,
-        defaultTargetMs: down ? parseDuration(down) : up ? null : undefined,
-        alarmStyle: alarm,
         deadline: clearDeadline ? null : deadlineStr ? parseDate(deadlineStr) : undefined,
         deadlineKind: since ? "since" : until ? "until" : undefined,
+        category: pullOpt("--category"),
+        color: pullOpt("--color"),
       });
       out(`configured "${card.name}"`, card);
+      break;
+    }
+    case "timers": {
+      // List a card's timers. Defaults to the slotted card if no id given.
+      const arg = argv[0];
+      const cardId = arg ? await resolveCardId(dev, arg) : (await dev.view()).card?.id;
+      if (!cardId) die("no card — slot one or pass an id: timecards timers <card>");
+      const timers = await dev.listTimers(cardId);
+      const slot = await dev.view();
+      const activeId = slot.card?.id === cardId ? slot.timer?.id : null;
+      if (json) {
+        const rows = await Promise.all(timers.map(async t => ({ ...t, totalMs: await dev.timerTotalMs(t.id) })));
+        out("", { cardId, activeTimerId: activeId, timers: rows });
+      } else if (timers.length === 0) {
+        console.log(`${cardId}: no timers — add one: timecards timer add ${cardId} "Name" [--down <dur>]`);
+      } else {
+        for (const t of timers) console.log(timerLine(t, activeId, await dev.timerTotalMs(t.id)));
+      }
+      break;
+    }
+    case "timer": {
+      const sub = argv.shift();
+      if (sub === "add") {
+        const cardId = await resolveCardId(dev, need(`timer add <card> "<name>" [--down <dur>] [--alarm X]`));
+        const name = argv.shift();
+        const down = pullOpt("--down");
+        const t = await dev.addTimer(cardId, {
+          name,
+          mode: down ? "down" : "up",
+          targetMs: down ? parseDuration(down) : null,
+          alarmStyle: pullOpt("--alarm") as AlarmStyle | undefined,
+        });
+        out(`added timer "${t.name}" to ${cardId}`, t);
+      } else if (sub === "rm" || sub === "delete") {
+        const cardId = await resolveCardId(dev, need(`timer rm <card> <timer-name|id>`));
+        const t = await resolveTimer(dev, cardId, need(`timer rm <card> <timer-name|id>`));
+        const v = await dev.deleteTimer(t.id);
+        out(`deleted timer "${t.name}"`, v);
+      } else if (sub === "switch" || sub === "use") {
+        const cardId = (await dev.view()).card?.id;
+        if (!cardId) die("slot a card first: timecards slot <card>");
+        const t = await resolveTimer(dev, cardId, need(`timer switch <timer-name|id>`));
+        const v = await dev.switchTimer(t.id);
+        out(viewLine(v), v);
+      } else if (sub === "edit") {
+        const cardId = await resolveCardId(dev, need(`timer edit <card> <timer> [--name X] [--down <dur>|--up] [--alarm X]`));
+        const t = await resolveTimer(dev, cardId, need(`timer edit <card> <timer> ...`));
+        const down = pullOpt("--down"); const up = pullFlag("--up");
+        const edited = await dev.configureTimer(t.id, {
+          name: pullOpt("--name"),
+          mode: up ? "up" : down ? "down" : undefined,
+          targetMs: down ? parseDuration(down) : up ? null : undefined,
+          alarmStyle: pullOpt("--alarm") as AlarmStyle | undefined,
+        });
+        out(`edited timer "${edited.name}"`, edited);
+      } else {
+        die(`usage: timecards timer add|rm|switch|edit …`);
+      }
       break;
     }
     case "lock": {
@@ -162,12 +234,16 @@ try {
       const slot = await dev.view();
       const active = slot.card?.id ?? null;
       if (json) {
-        const data = await Promise.all(cards.map(async c => ({ ...c, totalMs: await dev.totalMs(c.id) })));
+        const data = await Promise.all(cards.map(async c => ({
+          ...c, totalMs: await dev.totalMs(c.id), timers: await dev.listTimers(c.id),
+        })));
         out("", { active, cards: data });
       } else if (cards.length === 0) {
         console.log("no cards yet — create one: timecards new \"Writing\"");
       } else {
-        for (const c of cards) console.log(cardLine(c, active, await dev.totalMs(c.id)));
+        for (const c of cards) {
+          console.log(cardLine(c, active, await dev.totalMs(c.id), (await dev.listTimers(c.id)).length));
+        }
       }
       break;
     }
@@ -248,22 +324,31 @@ function need(usage: string): string {
 function printHelp() {
   console.log(`timecards — time tracking, in card form
 
-  new "<name>" [--category X] [--color "#abc"]   create a card
-       [--down <dur>] [--alarm chime|blip|silent]  …with a countdown default + alarm
-  config <id> [--down <dur>|--up] [--alarm X]    set a card's defaults
-         [--deadline YYYY-MM-DD] [--since|--until] [--no-deadline]
+CARDS
+  new "<name>" [--category X] [--color "#abc"]   create a card (seeds a first timer)
+       [--down <dur>] [--alarm chime|blip|silent]  …make that first timer a countdown
   cards                                          list cards (▶ = slotted)
-  slot <id|name>                                 put a card in the device
-  slot --nfc <uid>                               slot by NFC tag
+  config <id> [--deadline YYYY-MM-DD]            card-level: deadline / streak …
+         [--since|--until] [--no-deadline] [--category X] [--color #abc]
+  rm <id>                                        delete a card + its timers + history
+  nfc <id> <uid>                                 register an NFC tag to a card
+
+TIMERS (a card holds up to 10)
+  timers [<card>]                                list a card's timers (▶ = active)
+  timer add <card> "<name>" [--down <dur>] [--alarm X]   add a timer
+  timer rm <card> <timer>                        delete a timer
+  timer switch <timer>                           switch the slotted card's active timer
+  timer edit <card> <timer> [--name X] [--down <dur>|--up] [--alarm X]
+
+DEVICE
+  slot <id|name> | slot --nfc <uid>              put a card in the device
   press [--down <dur>] [--up]                    the big button: start / pause / resume
-  stop                                           stop & save current session
+  stop                                           stop & save the active timer's session
   lock | unlock                                  freeze / unfreeze the big button
-  eject                                          remove the card from the device
+  eject                                          remove the card (suspends its timer)
   status                                         what's slotted & running
   report [<id>]                                  total tracked time
-  nfc <id> <uid>                                 register an NFC tag to a card
-  rm <id>                                        delete a card + history
 
-  <dur> = minutes (25) or H:M:S (1:30:00).
-  Add --json to any command for machine-readable output (Arduino/Pi bridges).`);
+  <dur> = minutes (25) or H:M:S (1:30:00). Switching timers suspends one and
+  resumes another where it left off. Add --json for machine-readable output.`);
 }

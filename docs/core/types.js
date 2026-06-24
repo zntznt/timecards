@@ -2,8 +2,13 @@
 // Times are integer epoch milliseconds. Durations are integer milliseconds.
 // We never store floats — drift-free and exact. ponytail: ints over floats, no rounding bugs.
 
+/** Max timers a single card may hold. Keeps scope from exploding. */
+export const MAX_TIMERS = 10;
+
 /** A thing the user wants to dedicate time to: a hobby, a category, a task.
- *  e.g. "Writing", "Cooking", "Studying". NOT a specific session — the bucket. */
+ *  e.g. "Writing", "Cooking", "Studying". NOT a specific session — the bucket.
+ *  A card OWNS a list of Timers (≤ MAX_TIMERS); the timers hold the actual
+ *  mode/duration/alarm config and their own in-progress session. */
                        
                                                                                     
              
@@ -18,21 +23,39 @@
                         
                                               
                     
-
-                                                                                  
                                                                               
-                                                                                
-                          
-                                                                        
-                                  
-                                                                
-                                                 
-                          
+                                    
+                              
+
+                                                                      
                                                                              
                            
                                                                           
                                                                     
                               
+ 
+
+/** A reusable timer configuration that lives inside a card. A card can hold up
+ *  to MAX_TIMERS of these (e.g. 5 countdowns + 2 stopwatches). Each carries its
+ *  own in-progress session, so switching timers suspends one and resumes another. */
+                        
+                                           
+             
+                 
+                                                                      
+               
+                                              
+                  
+                                                                   
+                          
+                                                 
+                         
+                                                                             
+                                                                             
+                              
+                                                           
+                
+                    
  
 
 /** Alarm behavior at countdown zero. Mirrors a physical alarm-duration switch:
@@ -51,10 +74,12 @@
                   
  
 
-/** One tracked stretch of time against a card. Closed when ended. */
+/** One tracked stretch of time against a specific timer (on a card). Closed when ended. */
                           
              
                  
+                                             
+                  
                                                                                 
                   
                                                                    
@@ -73,12 +98,14 @@
 /** What the slotted card is doing right now. Drives the big button. */
                                                                              
 
-/** The single "device slot": which card is in, and its live session.
- *  Exactly one card occupies the slot at a time (by design). */
+/** The single "device slot": which card is in, and which of its timers is active.
+ *  Exactly one card and one active timer at a time. The live session lives on the
+ *  Timer (not here), so switching timers is suspend/resume, and the slot only
+ *  needs to remember which timer is currently selected. */
                        
                         
-                                                                            
-                          
+                                                                   
+                               
                                                                             
                                                                          
                    
@@ -88,6 +115,10 @@
                            
                   
                     
+                                                                            
+                      
+                                                                                 
+                  
                                                                                             
                     
                                                                      
@@ -95,7 +126,7 @@
                          
                                                                                      
                     
-                                                                                     
+                                                                          
                          
                                                       
                   
@@ -114,6 +145,13 @@
                                         
                                                                             
                                                      
+
+                                                         
+                                        
+                                              
+                                                   
+                                               
+                                         
 
                        
                                               

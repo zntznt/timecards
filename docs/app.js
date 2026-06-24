@@ -1,19 +1,20 @@
-// Web app: wires the DOM to the shared core. Big button, readout, deck, plus
-// countdown, alarm, deadline/day-count, lock, and the card editor.
-// Same Device + timer logic as the CLI — only the storage adapter (IndexedDB) differs.
+// Web app: wires the DOM to the shared core. Big button, readout, deck of cards,
+// and — within a slotted card — its list of timers (switch suspends/resumes).
+// Same Device + timer logic as the CLI; only the storage adapter (IndexedDB) differs.
 
 import { Device } from "./core/device.js";
 import { IdbStore } from "./idb-store.js";
 import { fmtDuration } from "./core/format.js";
 import { bigButtonAction } from "./core/timer.js";
-                                                                                            
+import { MAX_TIMERS } from "./core/types.js";
+                                                                                                   
 
 const dev = new Device(new IdbStore());
 
-// ── element refs ────────────────────────────────────────────────
 const $ =                        (id        ) => document.getElementById(id)     ;
 const elDevice = $("device");
 const elCardName = $("card-name");
+const elTimerName = $("timer-name");
 const elDayCount = $("daycount");
 const elReadout = $("readout");
 const elSub = $("sub");
@@ -22,16 +23,17 @@ const elBigLabel = $("big-label");
 const elStop = $                   ("stop");
 const elEject = $                   ("eject");
 const elLock = $                   ("lock-toggle");
-const elModeRow = $("mode-row");
+const elTimers = $("timers");
+const elTimerList = $("timer-list");
+const elAddTimer = $                   ("add-timer");
 const elList = $("card-list");
 const elAdd = $                   ("add-card");
-const elEditor = $                   ("editor");
-const elDurDialog = $                   ("dur-dialog");
+const elCardEditor = $                   ("card-editor");
+const elTimerEditor = $                   ("timer-editor");
 
 const GLYPH                         = { start: "▶", pause: "❚❚", resume: "▶", noop: "●" };
 
-// ── alarm (WebAudio, no asset files) ────────────────────────────
-// A short synthesized tone so there's nothing to host. Style picks the pattern.
+// ── alarm (WebAudio) ────────────────────────────────────────────
 let audioCtx                      = null;
 function beep(freq        , durMs        , when = 0) {
   if (!audioCtx) audioCtx = new (window.AudioContext || (window       ).webkitAudioContext)();
@@ -39,27 +41,19 @@ function beep(freq        , durMs        , when = 0) {
   const t0 = ctx.currentTime + when;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
-  osc.frequency.value = freq;
-  osc.type = "sine";
+  osc.frequency.value = freq; osc.type = "sine";
   gain.gain.setValueAtTime(0.0001, t0);
   gain.gain.exponentialRampToValueAtTime(0.3, t0 + 0.01);
   gain.gain.exponentialRampToValueAtTime(0.0001, t0 + durMs / 1000);
   osc.connect(gain).connect(ctx.destination);
-  osc.start(t0);
-  osc.stop(t0 + durMs / 1000 + 0.02);
+  osc.start(t0); osc.stop(t0 + durMs / 1000 + 0.02);
 }
 function playAlarm(style            ) {
-  if (style === "silent") return;          // visual pulse only (handled by CSS)
+  if (style === "silent") return;
   if (style === "blip") { beep(880, 90); return; }
-  // chime: three rising tones
   beep(660, 180, 0); beep(880, 180, 0.2); beep(1175, 320, 0.42);
 }
-
-// Track which session we've already alarmed for, so it fires once.
-let alarmedSessionId                = null;
-
-// ── per-session mode override chosen via the chips, applied on next start ──
-let pendingMode                                                = null;
+let alarmedFor                = null; // timerId:sessionId we've already alarmed
 
 // ── render ──────────────────────────────────────────────────────
 async function renderDevice() {
@@ -67,7 +61,6 @@ async function renderDevice() {
   elDevice.className = v.state + (v.locked ? " is-locked" : "");
   elLock.textContent = v.locked ? "🔒" : "🔓";
 
-  // Day-count badge.
   if (v.dayCount) {
     const d = v.dayCount;
     elDayCount.hidden = false;
@@ -75,68 +68,90 @@ async function renderDevice() {
     elDayCount.textContent = d.kind === "until"
       ? (d.passed ? "⏰ deadline passed" : `⏰ ${d.days} day${d.days === 1 ? "" : "s"} left`)
       : `🔥 day ${d.days}`;
-  } else {
-    elDayCount.hidden = true;
-  }
+  } else elDayCount.hidden = true;
 
   if (v.state === "empty") {
-    elCardName.textContent = "no card";
-    elCardName.classList.add("empty");
+    elCardName.textContent = "no card"; elCardName.classList.add("empty");
+    elTimerName.textContent = "";
     elReadout.textContent = "00:00";
     elSub.textContent = "slot a card from your deck to begin";
     elBigLabel.textContent = "●";
-    elBig.disabled = true;
-    elStop.disabled = elEject.disabled = true;
-    elModeRow.hidden = true;
+    elBig.disabled = true; elStop.disabled = elEject.disabled = true;
+    elTimers.hidden = true;
     return;
   }
   elCardName.classList.remove("empty");
   elCardName.textContent = v.card .name;
-  elBig.disabled = v.locked || v.state === "finished";
   elEject.disabled = false;
+  elTimers.hidden = false;
+  renderTimerList(v);
 
-  // Readout: countdown shows remaining; stopwatch shows elapsed with hundredths.
-  if (v.mode === "down" && v.remainingMs !== null) {
-    elReadout.textContent = fmtDuration(v.remainingMs);
-  } else if (v.mode === "up") {
-    elReadout.textContent = fmtDuration(v.elapsedMs, true); // hundredths
-  } else {
-    // ready: preview the default that a press would start with
-    const previewDown = v.card .defaultMode === "down" && v.card .defaultTargetMs;
-    elReadout.textContent = previewDown ? fmtDuration(v.card .defaultTargetMs ) : "00:00";
+  // No timer selected (card has none): prompt to add one.
+  if (!v.timer) {
+    elTimerName.textContent = "no timers yet";
+    elReadout.textContent = "—";
+    elSub.textContent = "add a timer to begin";
+    elBigLabel.textContent = "●";
+    elBig.disabled = true; elStop.disabled = true;
+    return;
   }
+  elTimerName.textContent = v.timer.name;
+  elBig.disabled = v.locked || v.state === "finished";
 
-  const action = bigButtonAction(v.state);
-  elBigLabel.textContent = GLYPH[action] ?? "●";
+  if (v.mode === "down" && v.remainingMs !== null) elReadout.textContent = fmtDuration(v.remainingMs);
+  else if (v.mode === "up") elReadout.textContent = fmtDuration(v.elapsedMs, true);
+  else elReadout.textContent = v.timer.mode === "down" && v.timer.targetMs ? fmtDuration(v.timer.targetMs) : "00:00";
 
-  // Mode chips only while idle (ready).
-  elModeRow.hidden = v.state !== "ready";
-  if (v.state === "ready") markSelectedChip(v.card );
+  elBigLabel.textContent = GLYPH[bigButtonAction(v.state)] ?? "●";
 
   if (v.state === "ready") { elSub.textContent = "press to start"; elStop.disabled = true; }
   else if (v.state === "running") { elSub.textContent = v.mode === "down" ? "counting down…" : "tracking…"; elStop.disabled = false; }
   else if (v.state === "paused") { elSub.textContent = "paused"; elStop.disabled = false; }
   else if (v.state === "finished") {
-    elSub.textContent = "time's up — press stop to save";
-    elStop.disabled = false;
-    // Fire the alarm once per finished session.
-    const sid = (await dev.view()).card?.id + ":fin";
-    if (alarmedSessionId !== sid) { alarmedSessionId = sid; playAlarm(v.alarmStyle); }
+    elSub.textContent = "time's up — press stop to save"; elStop.disabled = false;
+    const key = v.timer.id + ":" + (v.timer.liveSession?.id ?? "");
+    if (alarmedFor !== key) { alarmedFor = key; playAlarm(v.alarmStyle); }
   }
 }
 
-function markSelectedChip(card      ) {
-  const chips = elModeRow.querySelectorAll                   (".chip");
-  chips.forEach(c => c.classList.remove("sel"));
-  // Reflect the pending override, else the card default.
-  let key = "up";
-  if (pendingMode) {
-    key = pendingMode.mode === "up" ? "up" : String((pendingMode.targetMs ?? 0) / 60000);
-  } else if (card.defaultMode === "down" && card.defaultTargetMs) {
-    key = String(card.defaultTargetMs / 60000);
+function renderTimerList(v          ) {
+  elTimerList.innerHTML = "";
+  elAddTimer.disabled = v.timers.length >= MAX_TIMERS;
+  elAddTimer.title = elAddTimer.disabled ? `max ${MAX_TIMERS} timers` : "add a timer";
+  if (v.timers.length === 0) {
+    const li = document.createElement("li");
+    li.className = "timers-empty";
+    li.textContent = "no timers — add one to start tracking";
+    elTimerList.appendChild(li);
+    return;
   }
-  const match = [...chips].find(c => c.dataset.mode === key);
-  (match ?? chips[0]).classList.add("sel");
+  for (const t of v.timers) elTimerList.appendChild(timerRow(t, v.timer?.id ?? null));
+}
+
+function timerRow(t       , activeId               )                {
+  const li = document.createElement("li");
+  li.className = "timer-row" + (t.id === activeId ? " active" : "");
+  const nm = document.createElement("span"); nm.className = "t-nm"; nm.textContent = t.name;
+  const cfg = document.createElement("span"); cfg.className = "t-cfg";
+  cfg.textContent = t.mode === "down" && t.targetMs ? fmtDuration(t.targetMs) : "stopwatch";
+  const live = document.createElement("span");
+  if (t.liveSession) {
+    const held = t.liveSession.pausedAt !== null;
+    live.className = "t-live " + (held ? "held" : "run");
+    live.textContent = held ? "⏸" : "▶";
+  }
+  const edit = document.createElement("button");
+  edit.className = "t-del"; edit.textContent = "✎"; edit.title = "edit timer";
+  edit.onclick = (e) => { e.stopPropagation(); openTimerEditor(t.cardId, t); };
+  const del = document.createElement("button");
+  del.className = "t-del"; del.textContent = "✕"; del.title = "delete timer";
+  del.onclick = async (e) => {
+    e.stopPropagation();
+    if (confirm(`Delete timer "${t.name}"? Its time is saved to history.`)) { await dev.deleteTimer(t.id); await renderAll(); }
+  };
+  li.onclick = async () => { await dev.switchTimer(t.id); await renderAll(); };
+  li.append(nm, cfg, live, edit, del);
+  return li;
 }
 
 async function renderDeck() {
@@ -145,176 +160,151 @@ async function renderDeck() {
   elList.innerHTML = "";
   if (cards.length === 0) {
     const li = document.createElement("li");
-    li.className = "empty-deck";
-    li.textContent = "no cards yet — make one with “+ new card”";
-    elList.appendChild(li);
-    return;
+    li.className = "empty-deck"; li.textContent = "no cards yet — make one with “+ new card”";
+    elList.appendChild(li); return;
   }
   for (const c of cards) elList.appendChild(await cardItem(c, active));
 }
 
 async function cardItem(c      , active               )                         {
   const total = await dev.totalMs(c.id);
+  const timers = await dev.listTimers(c.id);
   const li = document.createElement("li");
   li.className = "card-item" + (c.id === active ? " active" : "");
-
   const swatch = document.createElement("span");
-  swatch.className = "card-swatch";
-  swatch.style.background = c.color || "#6ee7b7";
-
-  const meta = document.createElement("div");
-  meta.className = "card-meta";
+  swatch.className = "card-swatch"; swatch.style.background = c.color || "#6ee7b7";
+  const meta = document.createElement("div"); meta.className = "card-meta";
   const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = c.name;
   const det = document.createElement("div"); det.className = "det";
-  const bits           = [];
-  if (c.category) bits.push(c.category);
-  if (c.defaultMode === "down" && c.defaultTargetMs) bits.push(`⏲ ${fmtDuration(c.defaultTargetMs)}`);
+  const bits           = [`${timers.length} timer${timers.length === 1 ? "" : "s"}`];
+  if (c.category) bits.unshift(c.category);
   if (c.deadline) bits.push((c.deadlineKind ?? "until") === "until" ? "⏰ deadline" : "🔥 streak");
-  det.textContent = bits.join("  ·  ") || "—";
+  det.textContent = bits.join("  ·  ");
   meta.append(nm, det);
-
-  const tot = document.createElement("div");
-  tot.className = "card-total";
-  tot.textContent = fmtDuration(total);
-
-  const actions = document.createElement("div");
-  actions.className = "card-actions";
+  const tot = document.createElement("div"); tot.className = "card-total"; tot.textContent = fmtDuration(total);
+  const actions = document.createElement("div"); actions.className = "card-actions";
   const edit = document.createElement("button");
   edit.className = "card-edit"; edit.textContent = "✎"; edit.title = "edit card";
-  edit.onclick = (e) => { e.stopPropagation(); openEditor(c); };
+  edit.onclick = (e) => { e.stopPropagation(); openCardEditor(c); };
   const del = document.createElement("button");
   del.className = "card-del"; del.textContent = "✕"; del.title = "delete card";
   del.onclick = async (e) => {
     e.stopPropagation();
-    if (confirm(`Delete "${c.name}" and its history?`)) { await dev.deleteCard(c.id); await renderAll(); }
+    if (confirm(`Delete "${c.name}", its timers, and history?`)) { await dev.deleteCard(c.id); await renderAll(); }
   };
   actions.append(edit, del);
-
-  li.onclick = async () => { pendingMode = null; await dev.slot(c.id); await renderAll(); };
+  li.onclick = async () => { await dev.slot(c.id); await renderAll(); };
   li.append(swatch, meta, tot, actions);
   return li;
 }
 
 async function renderAll() { await renderDevice(); await renderDeck(); }
 
-// ── interactions ────────────────────────────────────────────────
-elBig.onclick = async () => {
-  const v = await dev.view();
-  if (v.state === "ready") {
-    await dev.press(pendingMode ?? {});   // honor a chip override, else the card default
-    pendingMode = null;
-  } else {
-    await dev.press();                    // pause / resume
-  }
-  await renderAll();
-};
-elStop.onclick = async () => { alarmedSessionId = null; await dev.stop(); await renderAll(); };
-elEject.onclick = async () => { pendingMode = null; await dev.eject(); await renderAll(); };
+// ── device interactions ─────────────────────────────────────────
+elBig.onclick = async () => { await dev.press(); await renderAll(); };
+elStop.onclick = async () => { alarmedFor = null; await dev.stop(); await renderAll(); };
+elEject.onclick = async () => { await dev.eject(); await renderAll(); };
 elLock.onclick = async () => { await dev.lock(); await renderDevice(); };
 
-// Mode chips: set the pending override for the next start.
-elModeRow.querySelectorAll                   (".chip").forEach(chip => {
-  chip.onclick = async () => {
-    const m = chip.dataset.mode ;
-    if (m === "up") pendingMode = { mode: "up" };
-    else if (m === "custom") {
-      const ms = await askDuration();
-      if (ms == null) return;
-      pendingMode = { mode: "down", targetMs: ms };
-    } else {
-      pendingMode = { mode: "down", targetMs: Number(m) * 60_000 };
-    }
-    await renderDevice();
-  };
-});
-
-// Spacebar = the big button (unless typing in a field / dialog open).
 document.addEventListener("keydown", (e) => {
   if (e.code === "Space" && !(e.target instanceof HTMLInputElement) &&
-      !(e.target instanceof HTMLSelectElement) && !elEditor.open && !elDurDialog.open) {
-    e.preventDefault();
-    elBig.click();
+      !(e.target instanceof HTMLSelectElement) && !elCardEditor.open && !elTimerEditor.open) {
+    e.preventDefault(); elBig.click();
   }
 });
 
-// ── custom-duration mini dialog ─────────────────────────────────
-function askDuration()                         {
-  return new Promise(resolve => {
-    const input = $                  ("dur-input");
-    input.value = "";
-    elDurDialog.showModal();
-    const form = elDurDialog.querySelector("form") ;
-    const cancel = $("dur-cancel");
-    const done = (val               ) => { elDurDialog.close(); form.onsubmit = null; resolve(val); };
-    form.onsubmit = (e) => { e.preventDefault(); done(parseDuration(input.value)); };
-    cancel.onclick = () => done(null);
-  });
-}
+// ── card editor ─────────────────────────────────────────────────
+let editingCardId                = null;
+elAdd.onclick = () => openCardEditor(null);
 
-// ── card editor (create + edit) ─────────────────────────────────
-let editingId                = null;
-
-elAdd.onclick = () => openEditor(null);
-
-function openEditor(card             ) {
-  editingId = card?.id ?? null;
-  $("editor-title").textContent = card ? "Edit card" : "New card";
-  $                  ("f-name").value = card?.name ?? "";
-  $                  ("f-category").value = card?.category ?? "";
-  $                  ("f-color").value = card?.color ?? "#6ee7b7";
-  const mode = card?.defaultMode ?? "up";
-  (elEditor.querySelector(`input[name=mode][value=${mode}]`)                    ).checked = true;
-  $                  ("f-duration").value = card?.defaultTargetMs ? fmtDuration(card.defaultTargetMs) : "";
-  $                   ("f-alarm").value = card?.alarmStyle ?? "chime";
-  $                  ("f-deadline").value = card?.deadline ? isoDate(card.deadline) : "";
+function openCardEditor(card             ) {
+  editingCardId = card?.id ?? null;
+  $("card-title").textContent = card ? "Edit card" : "New card";
+  $                  ("c-name").value = card?.name ?? "";
+  $                  ("c-category").value = card?.category ?? "";
+  $                  ("c-color").value = card?.color ?? "#6ee7b7";
+  $                  ("c-deadline").value = card?.deadline ? isoDate(card.deadline) : "";
   const dk = card?.deadlineKind ?? "until";
-  (elEditor.querySelector(`input[name=dkind][value=${dk}]`)                    ).checked = true;
-  elEditor.showModal();
+  (elCardEditor.querySelector(`input[name=dkind][value=${dk}]`)                    ).checked = true;
+  elCardEditor.showModal();
 }
-
-$("editor-cancel").onclick = () => elEditor.close();
-$                 ("editor-form").onsubmit = async (e) => {
+$("card-cancel").onclick = () => elCardEditor.close();
+$                 ("card-form").onsubmit = async (e) => {
   e.preventDefault();
-  const name = $                  ("f-name").value.trim();
+  const name = $                  ("c-name").value.trim();
   if (!name) return;
-  const category = $                  ("f-category").value.trim() || null;
-  const color = $                  ("f-color").value;
-  const mode = (elEditor.querySelector("input[name=mode]:checked")                    ).value             ;
-  const durStr = $                  ("f-duration").value.trim();
-  const targetMs = mode === "down" && durStr ? parseDuration(durStr) : null;
-  const alarmStyle = $                   ("f-alarm").value              ;
-  const dateStr = $                  ("f-deadline").value;
+  const category = $                  ("c-category").value.trim() || null;
+  const color = $                  ("c-color").value;
+  const dateStr = $                  ("c-deadline").value;
   const deadline = dateStr ? new Date(dateStr + "T00:00").getTime() : null;
-  const deadlineKind = (elEditor.querySelector("input[name=dkind]:checked")                    ).value                ;
-
-  if (editingId) {
-    await dev.configureCard(editingId, { defaultMode: mode, defaultTargetMs: targetMs, alarmStyle, deadline, deadlineKind, category, color });
-    await dev.renameCard(editingId, name);
+  const deadlineKind = (elCardEditor.querySelector("input[name=dkind]:checked")                    ).value                ;
+  if (editingCardId) {
+    await dev.renameCard(editingCardId, name);
+    await dev.configureCard(editingCardId, { category, color, deadline, deadlineKind });
   } else {
-    const c = await dev.createCard(name, { category: category ?? undefined, color, defaultMode: mode, defaultTargetMs: targetMs, alarmStyle });
+    const c = await dev.createCard(name, { category: category ?? undefined, color });
     if (deadline) await dev.configureCard(c.id, { deadline, deadlineKind });
+    await dev.slot(c.id); // slot the new card so its timers are visible
   }
-  elEditor.close();
+  elCardEditor.close();
   await renderAll();
 };
 
-// ── small parsers (mirror the CLI) ──────────────────────────────
+// ── timer editor ────────────────────────────────────────────────
+let editingTimerId                = null;
+let timerEditorCardId                = null;
+
+elAddTimer.onclick = async () => {
+  const cardId = (await dev.view()).card?.id;
+  if (cardId) openTimerEditor(cardId, null);
+};
+
+function openTimerEditor(cardId        , timer              ) {
+  timerEditorCardId = cardId;
+  editingTimerId = timer?.id ?? null;
+  $("timer-title").textContent = timer ? "Edit timer" : "New timer";
+  $                  ("t-name").value = timer?.name ?? "";
+  const mode = timer?.mode ?? "up";
+  (elTimerEditor.querySelector(`input[name=tmode][value=${mode}]`)                    ).checked = true;
+  $                  ("t-duration").value = timer?.targetMs ? fmtDuration(timer.targetMs) : "";
+  $                   ("t-alarm").value = timer?.alarmStyle ?? "chime";
+  elTimerEditor.showModal();
+}
+$("timer-cancel").onclick = () => elTimerEditor.close();
+$                 ("timer-form").onsubmit = async (e) => {
+  e.preventDefault();
+  const name = $                  ("t-name").value.trim();
+  const mode = (elTimerEditor.querySelector("input[name=tmode]:checked")                    ).value             ;
+  const durStr = $                  ("t-duration").value.trim();
+  const targetMs = mode === "down" && durStr ? parseDuration(durStr) : null;
+  const alarmStyle = $                   ("t-alarm").value              ;
+  if (editingTimerId) {
+    await dev.configureTimer(editingTimerId, { name: name || undefined, mode, targetMs, alarmStyle });
+  } else if (timerEditorCardId) {
+    try {
+      const t = await dev.addTimer(timerEditorCardId, { name, mode, targetMs, alarmStyle });
+      await dev.switchTimer(t.id); // make the new timer active
+    } catch (err) { alert(String(err instanceof Error ? err.message : err)); }
+  }
+  elTimerEditor.close();
+  await renderAll();
+};
+
+// ── parsers (mirror the CLI) ────────────────────────────────────
 function parseDuration(s        )                {
   if (!s.trim()) return null;
   const parts = s.split(":").map(Number);
   if (parts.some(isNaN)) return null;
-  if (parts.length === 1) return Math.round(parts[0] * 60_000);        // minutes
-  if (parts.length === 2) return (parts[0] * 60 + parts[1]) * 60_000;  // H:M
-  return (parts[0] * 3600 + parts[1] * 60 + parts[2]) * 1000;          // H:M:S
+  if (parts.length === 1) return Math.round(parts[0] * 60_000);
+  if (parts.length === 2) return (parts[0] * 60 + parts[1]) * 60_000;
+  return (parts[0] * 3600 + parts[1] * 60 + parts[2]) * 1000;
 }
 function isoDate(ms        )         {
   const d = new Date(ms);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-// ── tick ────────────────────────────────────────────────────────
-// The readout is cosmetic; truth is in storage. Re-render the device while live.
-// 100ms so the hundredths digits actually move on a running stopwatch.
+// ── tick: re-render the running readout 10×/sec so hundredths move ──
 setInterval(async () => {
   const v = await dev.view();
   if (v.state === "running" || v.state === "finished") await renderDevice();

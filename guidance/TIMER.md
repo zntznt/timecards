@@ -3,6 +3,31 @@
 All of this lives in `core/timer.ts` as pure functions. `core/device.ts` calls
 them and persists the results. Understand this before touching timing.
 
+## Timers within a card (the big idea)
+
+A **card owns up to `MAX_TIMERS` (10) timers**. Each `Timer` is a saved config
+(name, mode, duration, alarm) AND holds its own in-progress session in
+`timer.liveSession`. The slot tracks which timer is `activeTimerId`. The big
+button drives the **active timer's** session.
+
+**Switching timers = suspend & resume.** `device.switchTimer(id)`:
+1. If the outgoing timer is running, it's **paused** (the paused session stays on
+   that timer in storage — nothing is finalized, nothing lost).
+2. The target timer becomes active. Its held session (if any) is whatever state it
+   was left in — a paused session resumes on the next press; a never-started one is
+   `ready`.
+
+Swapping the whole **card** (or ejecting) does the same suspend to the active timer.
+So a half-done 25-min countdown on "Writing" survives you doing an hour on "Cooking"
+and switching back. This works because suspend is just `pause()` (see below) and the
+held session is three timestamps in storage, not a live in-memory clock.
+
+`device.addTimer` enforces the 10 cap (throws past it). `device.deleteTimer` saves
+any in-progress session to history first, then removes the timer; deleting down to
+zero is allowed (the card then shows "add a timer"). `device.stop()` finalizes the
+active timer's session to history and leaves the timer idle (not deleted).
+Per-timer history totals: `device.timerTotalMs(id)`; whole-card: `device.totalMs(id)`.
+
 ## States (`RunState`)
 
 ```

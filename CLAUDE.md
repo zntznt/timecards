@@ -5,9 +5,11 @@
 > a "device", and a big button starts / pauses / resumes its timer. Each card
 > keeps its own separate history. Swap the card → its data swaps in.
 >
-> Each card can default to a **stopwatch** or a **countdown** (with an **alarm**
-> at zero), carry a **deadline / streak** day-count, and the slot can be
-> **locked** to prevent accidental presses. See `guidance/TIMER.md` for the rules.
+> A card holds up to **10 named timers** (mix of stopwatches and countdowns). One
+> is active at a time; **switching a timer suspends it and resumes another where it
+> left off**. Each timer has its own **alarm**; the card carries an optional
+> **deadline / streak** day-count, and the slot can be **locked**. See
+> `guidance/TIMER.md` and `guidance/ARCHITECTURE.md` (the four nouns).
 
 **Read this file first.** Deeper docs live in [`/guidance`](./guidance).
 
@@ -45,8 +47,11 @@ node cli/timecards.ts help      # the CLI
 node web/build.ts               # build the web app into docs/ for GitHub Pages
 ```
 
-Open the web app locally: `node web/build.ts && cd docs && python3 -m http.server 8000`
-then visit http://localhost:8000.
+Open the web app locally — serve the **repo root** and visit `/docs/`, so it loads
+under a subpath exactly like GitHub Pages (don't serve `docs/` as root — that hides
+the subpath import bug, rule #7):
+`node web/build.ts && python3 -m http.server 8000` then visit
+http://localhost:8000/docs/index.html.
 
 ## Hard rules (learned the hard way — don't relearn them)
 
@@ -59,12 +64,18 @@ then visit http://localhost:8000.
 3. **Times are integer epoch-ms; durations are integer ms. Never floats.**
    A session stores `startedAt`, `pausedMs`, `pausedAt` — elapsed is *derived*,
    not a running counter. This is why a timer survives the app closing/reopening.
-4. **One card in the slot at a time.** Slotting a new card stops the old one and
-   saves its session to history. Don't add multi-slot without re-reading the spec.
+4. **One card + one active timer at a time.** A card holds ≤10 timers; switching a
+   timer (or swapping the card) *suspends* the current one (pauses, held on the
+   timer) rather than stopping it. `stop()` is what finalizes to history. Don't add
+   multi-slot or multi-active-timer without re-reading the spec.
 5. **`--json` on every CLI command.** It's the integration surface for hardware.
    Don't break the JSON shape; it's a contract (see `guidance/INTERFACES.md`).
 6. **Never describe this product as based on any specific physical timer device.**
    It's "a study/focus timer in card form." That's the whole framing.
+7. **Web imports must not climb above the publish root.** The build flattens
+   `web/app.ts` → `docs/app.js` and rewrites `../core` → `./core`. On a subpath host
+   (Pages at `/timecards/`) a stray `../core` 404s and the whole UI goes unclickable.
+   See `guidance/NODE-TS-GOTCHAS.md`; test by serving under a subpath.
 
 ## Where to look
 

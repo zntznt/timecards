@@ -26,18 +26,20 @@ cd docs && python3 -m http.server 8000   # then open http://localhost:8000
 
 **Command line:**
 ```bash
-node cli/timecards.ts new "Writing"
-node cli/timecards.ts new "Focus" --down 25 --alarm blip   # 25-min countdown card
-node cli/timecards.ts slot focus
-node cli/timecards.ts press        # start  (press again = pause, again = resume)
-node cli/timecards.ts lock         # freeze the big button; `unlock` to release
-node cli/timecards.ts config writing --deadline 2026-09-01 --until   # 'N days left'
+node cli/timecards.ts new "Hobby"                       # creates a card (+ a stopwatch)
+node cli/timecards.ts timer add hobby "Pomodoro" --down 25 --alarm blip
+node cli/timecards.ts timers hobby                      # list the card's timers
+node cli/timecards.ts slot hobby
+node cli/timecards.ts press                             # big button: start/pause/resume
+node cli/timecards.ts timer switch pomodoro             # suspends one, resumes the other
+node cli/timecards.ts lock                              # freeze the button; `unlock` to release
+node cli/timecards.ts config hobby --deadline 2026-09-01 --until   # 'N days left'
 node cli/timecards.ts status
 node cli/timecards.ts stop
-node cli/timecards.ts report
 ```
-Add `--json` to any command for machine-readable output. Run `node cli/timecards.ts help`
-for the full list.
+A card holds up to 10 timers; switching suspends one and resumes another where it
+left off. Add `--json` to any command for machine-readable output. Run
+`node cli/timecards.ts help` for the full list.
 
 Requires **Node 22+** (it runs the TypeScript directly — no build step, no
 dependencies). Data lives in `~/.timecards/data.db` for the CLI; in your browser

@@ -4,21 +4,36 @@
 //
 // IndexedDB is verbose; we wrap it in a few promise helpers. No dependency.
 
-                                                                     
+                                                                            
 
 const DB_NAME = "timecards";
-const DB_VERSION = 1;
+const DB_VERSION = 2; // v2 adds the `timers` store (Card → Timers model)
 
 function openDb()                       {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = (e) => {
       const db = req.result;
-      db.createObjectStore("cards", { keyPath: "id" });
-      const sessions = db.createObjectStore("sessions", { keyPath: "id" });
-      sessions.createIndex("byCard", "cardId");
-      db.createObjectStore("slot"); // single key "current" -> Slot
+      if (!db.objectStoreNames.contains("cards")) db.createObjectStore("cards", { keyPath: "id" });
+      if (!db.objectStoreNames.contains("sessions")) {
+        const sessions = db.createObjectStore("sessions", { keyPath: "id" });
+        sessions.createIndex("byCard", "cardId");
+      }
+      if (!db.objectStoreNames.contains("slot")) db.createObjectStore("slot");
+      // v2: timers store, indexed by card.
+      if (!db.objectStoreNames.contains("timers")) {
+        const timers = db.createObjectStore("timers", { keyPath: "id" });
+        timers.createIndex("byCard", "cardId");
+      }
     };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function getAllByIndex   (db             , store        , index        , key        )               {
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(store, "readonly").objectStore(store).index(index).getAll(key);
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
@@ -48,10 +63,20 @@ export class IdbStore                    {
     await tx(db, "cards", "readwrite", s => s.delete(id));
     const sessions = await this.listSessions(id);
     for (const sess of sessions) await tx(db, "sessions", "readwrite", s => s.delete(sess.id));
+    const timers = await this.listTimers(id);
+    for (const t of timers) await tx(db, "timers", "readwrite", s => s.delete(t.id));
   }
   async getCardByNfc(uid        ) {
     return (await this.listCards()).find(c => c.nfcUid === uid) ?? null;
   }
+
+  async putTimer(t       ) { await tx(await this.dbp, "timers", "readwrite", s => s.put(t)); }
+  async getTimer(id        ) { return (await tx                   (await this.dbp, "timers", "readonly", s => s.get(id))) ?? null; }
+  async listTimers(cardId        ) {
+    const all = await getAllByIndex       (await this.dbp, "timers", "byCard", cardId);
+    return all.sort((a, b) => a.order - b.order);
+  }
+  async deleteTimer(id        ) { await tx(await this.dbp, "timers", "readwrite", s => s.delete(id)); }
 
   async putSession(sess         ) { await tx(await this.dbp, "sessions", "readwrite", s => s.put(sess)); }
   async listSessions(cardId         ) {
@@ -70,7 +95,7 @@ export class IdbStore                    {
 
   async getSlot()                {
     const slot = await tx                  (await this.dbp, "slot", "readonly", s => s.get("current"));
-    return slot ?? { cardId: null, session: null };
+    return slot ?? { cardId: null, activeTimerId: null };
   }
   async setSlot(slot      ) { await tx(await this.dbp, "slot", "readwrite", s => s.put(slot, "current")); }
 }

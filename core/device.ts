@@ -1,15 +1,18 @@
 // The Device: the high-level API every interface drives. Wraps a Storage adapter
 // and the pure timer logic into the actions a user actually takes.
 //
-// "The device" = the single slot you put a card into. One card in at a time.
-// Swapping a card stops the outgoing card's session (its time is saved to history).
+// Model: a Card owns up to MAX_TIMERS Timers. The slot holds one card + one active
+// timer. Each timer carries its OWN in-progress session (timer.liveSession), so
+// switching timers SUSPENDS the current one and RESUMES the target — nothing is
+// lost. Stopping finalizes the active timer's session into history.
 
-import type { Storage, Card, Session, SlotView, TimerMode, AlarmStyle, DeadlineKind } from "./types.ts";
+import type { Storage, Card, Timer, Session, SlotView, TimerMode, AlarmStyle, DeadlineKind } from "./types.ts";
+import { MAX_TIMERS } from "./types.ts";
 import * as T from "./timer.ts";
 
 /** Drop keys whose value is undefined so a partial config only changes what's set. */
-function stripUndefined<T extends object>(o: T): Partial<T> {
-  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>;
+function stripUndefined<O extends object>(o: O): Partial<O> {
+  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<O>;
 }
 
 /** Make a CLI/URL-safe id from a name: "Crochet Time!" -> "crochet-time". */
@@ -18,16 +21,20 @@ export function slugify(name: string): string {
   return base || "card";
 }
 
+/** A sensible auto-name for a new timer from its config. */
+export function defaultTimerName(mode: TimerMode, targetMs: number | null): string {
+  if (mode === "up") return "Stopwatch";
+  const min = targetMs ? Math.round(targetMs / 60000) : 0;
+  return min ? `${min} min` : "Countdown";
+}
+
 export class Device {
-  // Node's strip-only TS doesn't allow constructor parameter properties, so we
-  // declare fields explicitly. ponytail: boring over clever — runs with zero build.
   private store: Storage;
   private now: () => number;
   private newId: () => string;
 
   constructor(
     store: Storage,
-    /** Injectable clock + id source — keeps Device testable. Defaults to real ones. */
     now: () => number = () => Date.now(),
     newId: () => string = () => Math.random().toString(36).slice(2, 10),
   ) {
@@ -39,10 +46,10 @@ export class Device {
   // ── Cards ──────────────────────────────────────────────────────
   async createCard(name: string, opts: {
     category?: string; color?: string; id?: string;
+    // Optional: seed a first timer with this config (else the card starts empty).
     defaultMode?: TimerMode; defaultTargetMs?: number | null; alarmStyle?: AlarmStyle;
   } = {}): Promise<Card> {
     let id = opts.id ?? slugify(name);
-    // Ensure unique id without surprising the user — append -2, -3, ... if taken.
     if (await this.store.getCard(id)) {
       let n = 2;
       while (await this.store.getCard(`${id}-${n}`)) n++;
@@ -55,20 +62,21 @@ export class Device {
       color: opts.color ?? null,
       nfcUid: null,
       createdAt: this.now(),
-      defaultMode: opts.defaultMode ?? "up",
-      defaultTargetMs: opts.defaultTargetMs ?? null,
-      alarmStyle: opts.alarmStyle ?? "chime",
+      lastTimerId: null,
       deadline: null,
       deadlineKind: "until",
     };
     await this.store.createCard(card);
-    return card;
+    // Seed a first timer so a fresh card is immediately usable.
+    const mode = opts.defaultMode ?? "up";
+    const targetMs = mode === "down" ? opts.defaultTargetMs ?? null : null;
+    await this.addTimer(id, { mode, targetMs, alarmStyle: opts.alarmStyle ?? "chime" });
+    return (await this.store.getCard(id))!;
   }
 
-  /** Set a card's defaults / deadline / alarm. Only provided keys change. */
+  /** Set card-level config (deadline / category / color). Only provided keys change. */
   async configureCard(id: string, cfg: {
-    defaultMode?: TimerMode; defaultTargetMs?: number | null;
-    alarmStyle?: AlarmStyle; deadline?: number | null; deadlineKind?: DeadlineKind;
+    deadline?: number | null; deadlineKind?: DeadlineKind;
     category?: string | null; color?: string | null;
   }): Promise<Card> {
     const card = await this.requireCard(id);
@@ -87,7 +95,6 @@ export class Device {
     return updated;
   }
 
-  /** Register a physical NFC tag UID to a card (for the hardware bridge). */
   async registerNfc(id: string, nfcUid: string): Promise<Card> {
     const card = await this.requireCard(id);
     const updated = { ...card, nfcUid };
@@ -95,91 +102,184 @@ export class Device {
     return updated;
   }
 
-  /** Delete a card and its history. If it's slotted, eject first. */
+  /** Delete a card, its timers, and its history. Ejects first if slotted. */
   async deleteCard(id: string): Promise<void> {
     const slot = await this.store.getSlot();
     if (slot.cardId === id) await this.eject();
+    for (const t of await this.store.listTimers(id)) await this.store.deleteTimer(t.id);
     await this.store.deleteCard(id);
+  }
+
+  // ── Timers (within a card) ─────────────────────────────────────
+
+  listTimers(cardId: string): Promise<Timer[]> { return this.store.listTimers(cardId); }
+
+  /** Add a timer to a card. Throws if the card already has MAX_TIMERS.
+   *  Returns the created timer. The card's lastTimerId points at it if it was the first. */
+  async addTimer(cardId: string, cfg: {
+    name?: string; mode?: TimerMode; targetMs?: number | null; alarmStyle?: AlarmStyle;
+  } = {}): Promise<Timer> {
+    const card = await this.requireCard(cardId);
+    const existing = await this.store.listTimers(cardId);
+    if (existing.length >= MAX_TIMERS) {
+      throw new Error(`Card "${cardId}" already has the maximum of ${MAX_TIMERS} timers`);
+    }
+    const mode = cfg.mode ?? "up";
+    const targetMs = mode === "down" ? cfg.targetMs ?? null : null;
+    const timer: Timer = {
+      id: this.newId(),
+      cardId,
+      name: (cfg.name ?? "").trim() || defaultTimerName(mode, targetMs),
+      mode,
+      targetMs,
+      alarmStyle: cfg.alarmStyle ?? "chime",
+      liveSession: null,
+      order: existing.length,
+      createdAt: this.now(),
+    };
+    await this.store.putTimer(timer);
+    // First timer on the card becomes its default-loaded one.
+    if (!card.lastTimerId) await this.store.updateCard({ ...card, lastTimerId: timer.id });
+    return timer;
+  }
+
+  /** Edit a timer's config. Changing mode/target only affects future sessions;
+   *  a running session is left alone (stop it first to apply a new countdown). */
+  async configureTimer(timerId: string, cfg: {
+    name?: string; mode?: TimerMode; targetMs?: number | null; alarmStyle?: AlarmStyle;
+  }): Promise<Timer> {
+    const timer = await this.requireTimer(timerId);
+    const next: Timer = { ...timer, ...stripUndefined(cfg) };
+    if (next.mode === "up") next.targetMs = null;
+    await this.store.putTimer(next);
+    return next;
+  }
+
+  /** Delete a timer. Its in-progress session (if any) is saved to history first.
+   *  If it was the active/last timer, the card falls back to another (or none). */
+  async deleteTimer(timerId: string): Promise<SlotView> {
+    const timer = await this.requireTimer(timerId);
+    if (timer.liveSession) await this.finalize(timer.liveSession);
+    await this.store.deleteTimer(timerId);
+
+    const card = await this.store.getCard(timer.cardId);
+    if (card) {
+      const remaining = await this.store.listTimers(timer.cardId);
+      if (card.lastTimerId === timerId) {
+        await this.store.updateCard({ ...card, lastTimerId: remaining[0]?.id ?? null });
+      }
+      // If the deleted timer was active in the slot, repoint the slot.
+      const slot = await this.store.getSlot();
+      if (slot.cardId === card.id && slot.activeTimerId === timerId) {
+        await this.store.setSlot({ ...slot, activeTimerId: remaining[0]?.id ?? null });
+      }
+    }
+    return this.view();
+  }
+
+  /** Switch the active timer on the slotted card. SUSPENDS the current timer
+   *  (pauses its session, kept on the timer) and activates the target (its held
+   *  session resumes when pressed; a paused held session stays paused until press). */
+  async switchTimer(timerId: string): Promise<SlotView> {
+    const slot = await this.store.getSlot();
+    if (!slot.cardId) return this.view();
+    const target = await this.store.getTimer(timerId);
+    if (!target || target.cardId !== slot.cardId) return this.view(); // not this card's timer
+    if (slot.activeTimerId === timerId) return this.view();           // already active
+
+    // Suspend the outgoing timer: if it's running, pause it (held on the timer).
+    if (slot.activeTimerId) {
+      const current = await this.store.getTimer(slot.activeTimerId);
+      if (current?.liveSession && current.liveSession.pausedAt === null && current.liveSession.endedAt === null) {
+        await this.store.putTimer({ ...current, liveSession: T.pause(current.liveSession, this.now()) });
+      }
+    }
+    await this.store.setSlot({ ...slot, activeTimerId: timerId });
+    // Remember this as the card's last-used timer.
+    const card = await this.store.getCard(slot.cardId);
+    if (card) await this.store.updateCard({ ...card, lastTimerId: timerId });
+    return this.view();
   }
 
   // ── The slot ───────────────────────────────────────────────────
 
-  /** Put a card into the device. Stops the previous card's running session first
-   *  (its time is preserved in history). The new card starts in 'ready'. */
+  /** Put a card into the device. Suspends the previous card's active timer (held),
+   *  loads this card's last-used timer. */
   async slot(cardId: string): Promise<SlotView> {
     await this.requireCard(cardId);
     const current = await this.store.getSlot();
-    if (current.cardId === cardId) return this.view(); // already in, no-op
-    if (current.session) await this.finalize(current.session); // save outgoing
-    await this.store.setSlot({ cardId, session: null });
+    if (current.cardId === cardId) return this.view();
+    // Suspend the outgoing card's active timer (pause if running — kept on timer).
+    await this.suspendActive(current);
+    const card = await this.store.getCard(cardId);
+    const timers = await this.store.listTimers(cardId);
+    const activeTimerId = card?.lastTimerId && timers.some(t => t.id === card.lastTimerId)
+      ? card.lastTimerId
+      : timers[0]?.id ?? null;
+    await this.store.setSlot({ cardId, activeTimerId, locked: false });
     return this.view();
   }
 
-  /** Slot a card by its NFC tag. Returns null view-card if the tag is unknown. */
   async slotByNfc(nfcUid: string): Promise<SlotView> {
     const card = await this.store.getCardByNfc(nfcUid);
-    if (!card) return this.view(); // unknown tag — caller can prompt to register
+    if (!card) return this.view();
     return this.slot(card.id);
   }
 
-  /** Remove the card from the device, saving any running session to history. */
+  /** Remove the card from the device. Its active timer is suspended (held, not lost). */
   async eject(): Promise<SlotView> {
     const slot = await this.store.getSlot();
-    if (slot.session) await this.finalize(slot.session);
-    await this.store.setSlot({ cardId: null, session: null });
+    await this.suspendActive(slot);
+    await this.store.setSlot({ cardId: null, activeTimerId: null, locked: false });
     return this.view();
   }
 
   // ── The big button ─────────────────────────────────────────────
 
-  /** One press. Does the right thing for the current state:
-   *  ready -> start, running -> pause, paused -> resume.
-   *  On start with no override, honors the card's default mode/target.
-   *  Ignored while the slot is locked. */
+  /** One press, on the ACTIVE timer:
+   *  ready -> start (using the timer's mode/target), running -> pause, paused -> resume.
+   *  Ignored while locked or when there's no active timer. */
   async press(opts: { mode?: TimerMode; targetMs?: number } = {}): Promise<SlotView> {
     const slot = await this.store.getSlot();
-    if (!slot.cardId) return this.view(); // empty slot — nothing to press
-    if (slot.locked) return this.view();   // locked — ignore presses
+    if (!slot.cardId || !slot.activeTimerId || slot.locked) return this.view();
+    const timer = await this.store.getTimer(slot.activeTimerId);
+    if (!timer) return this.view();
     const now = this.now();
-    const action = T.bigButtonAction(T.runState(slot.session, now));
+    const action = T.bigButtonAction(T.runState(timer.liveSession, now));
     switch (action) {
       case "start": {
-        // Override wins; otherwise fall back to the card's configured default.
-        const card = await this.store.getCard(slot.cardId);
-        const mode = opts.mode ?? card?.defaultMode ?? "up";
-        const targetMs = opts.targetMs ?? (mode === "down" ? card?.defaultTargetMs ?? null : null);
-        const s = T.startSession(this.newId(), slot.cardId, now, mode, targetMs);
-        await this.saveSlot(slot, s);
+        const mode = opts.mode ?? timer.mode;
+        const targetMs = opts.targetMs ?? (mode === "down" ? timer.targetMs : null);
+        const s = T.startSession(this.newId(), timer.cardId, timer.id, now, mode, targetMs);
+        await this.store.putTimer({ ...timer, liveSession: s });
         break;
       }
       case "pause":
-        await this.saveSlot(slot, T.pause(slot.session!, now));
+        await this.store.putTimer({ ...timer, liveSession: T.pause(timer.liveSession!, now) });
         break;
       case "resume":
-        await this.saveSlot(slot, T.resume(slot.session!, now));
+        await this.store.putTimer({ ...timer, liveSession: T.resume(timer.liveSession!, now) });
         break;
-      // noop: empty or finished — press does nothing; caller uses stop()/reset.
+      // noop: finished — press does nothing; caller uses stop().
     }
     return this.view();
   }
 
-  /** Stop and save the current session to history. Slot keeps the same card (ready again).
-   *  Ignored while locked. */
+  /** Stop the active timer's session and save it to history. Timer stays, idle. */
   async stop(): Promise<SlotView> {
     const slot = await this.store.getSlot();
-    if (slot.locked) return this.view();
-    if (slot.session) {
-      await this.finalize(slot.session);
-      await this.saveSlot(slot, null);
+    if (slot.locked || !slot.activeTimerId) return this.view();
+    const timer = await this.store.getTimer(slot.activeTimerId);
+    if (timer?.liveSession) {
+      await this.finalize(timer.liveSession);
+      await this.store.putTimer({ ...timer, liveSession: null });
     }
     return this.view();
   }
 
-  /** Toggle (or set) the slot lock. The lock itself is always operable. */
   async lock(on?: boolean): Promise<SlotView> {
     const slot = await this.store.getSlot();
-    const locked = on ?? !slot.locked;
-    await this.store.setSlot({ ...slot, locked });
+    await this.store.setSlot({ ...slot, locked: on ?? !slot.locked });
     return this.view();
   }
 
@@ -188,23 +288,36 @@ export class Device {
   async view(): Promise<SlotView> {
     const slot = await this.store.getSlot();
     const card = slot.cardId ? await this.store.getCard(slot.cardId) : null;
-    return T.viewOf(card, slot.session, this.now(), slot.locked ?? false);
+    const timers = card ? await this.store.listTimers(card.id) : [];
+    const timer = slot.activeTimerId ? timers.find(t => t.id === slot.activeTimerId) ?? null : null;
+    return T.viewOf(card, timer, timers, this.now(), slot.locked ?? false);
   }
 
   listSessions(cardId?: string): Promise<Session[]> { return this.store.listSessions(cardId); }
 
-  /** Total tracked ms for a card across all completed sessions. */
+  /** Total tracked ms for a card across all completed sessions (all its timers). */
   async totalMs(cardId: string): Promise<number> {
     const sessions = await this.store.listSessions(cardId);
     return sessions.reduce((sum, s) => sum + T.elapsed(s, this.now()), 0);
   }
 
+  /** Total tracked ms for a single timer across its completed sessions. */
+  async timerTotalMs(timerId: string): Promise<number> {
+    const timer = await this.store.getTimer(timerId);
+    if (!timer) return 0;
+    const sessions = await this.store.listSessions(timer.cardId);
+    return sessions.filter(s => s.timerId === timerId).reduce((sum, s) => sum + T.elapsed(s, this.now()), 0);
+  }
+
   // ── internals ──────────────────────────────────────────────────
 
-  /** Persist a new session into the current slot, preserving its lock state.
-   *  Used by press/stop so locking survives within one slotted card's lifetime. */
-  private saveSlot(slot: { cardId: string | null; locked?: boolean }, session: Session | null): Promise<void> {
-    return this.store.setSlot({ cardId: slot.cardId, session, locked: slot.locked ?? false });
+  /** Pause (suspend) the slot's active timer if it's running — keeps it on the timer. */
+  private async suspendActive(slot: { cardId: string | null; activeTimerId: string | null }): Promise<void> {
+    if (!slot.activeTimerId) return;
+    const timer = await this.store.getTimer(slot.activeTimerId);
+    if (timer?.liveSession && timer.liveSession.pausedAt === null && timer.liveSession.endedAt === null) {
+      await this.store.putTimer({ ...timer, liveSession: T.pause(timer.liveSession, this.now()) });
+    }
   }
 
   private async finalize(session: Session): Promise<void> {
@@ -216,5 +329,11 @@ export class Device {
     const card = await this.store.getCard(id);
     if (!card) throw new Error(`No card with id "${id}"`);
     return card;
+  }
+
+  private async requireTimer(id: string): Promise<Timer> {
+    const timer = await this.store.getTimer(id);
+    if (!timer) throw new Error(`No timer with id "${id}"`);
+    return timer;
   }
 }

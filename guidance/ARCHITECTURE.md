@@ -22,27 +22,32 @@ PERSISTENCE  ~/.timecards/data.db            browser IndexedDB            Postgr
 Interfaces import `device` + one adapter. Nothing in `core/` imports an interface
 or a concrete adapter — that's what keeps it portable.
 
-## The three nouns
+## The four nouns
 
 - **Card** — a thing the user dedicates time to. A *category of doing*, not a
   specific task: "Writing", "Crocheting", "Work", "Exercise". Has a stable `id`
-  (also what an NFC tag maps to), a name, optional category/color, optional
-  `nfcUid`. Cards are the user's deck.
-- **Session** — one tracked stretch of time against a card. Created when the timer
-  starts, closed when stopped. Carries the timestamps that make elapsed-time exact.
-- **Slot** — "the device". Holds *one* card and its current (live) session. This is
-  the single-slot model: one card active at a time. Swapping saves the outgoing
-  session to history.
+  (also what an NFC tag maps to), a name, optional category/color, `nfcUid`, an
+  optional `deadline` (day-count), and `lastTimerId` (which timer loads on slot).
+  A card OWNS a list of timers. Cards are the user's deck.
+- **Timer** — a reusable timer config *inside* a card: name + mode (stopwatch/
+  countdown) + duration + alarm. A card holds up to `MAX_TIMERS` (10) of them
+  (e.g. 5 countdowns + 2 stopwatches). Each timer carries its OWN in-progress
+  session (`liveSession`) — this is what makes switching timers suspend/resume.
+- **Session** — one tracked stretch of time against a *specific timer* on a card.
+  Created when started, closed when stopped (→ history). Carries the timestamps
+  that make elapsed-time exact, plus `timerId` so history splits per timer.
+- **Slot** — "the device". Holds *one* card and one *active timer* (`activeTimerId`).
+  The live session lives on the timer, not the slot — so switching timers only
+  changes which timer is active; the outgoing one's session is paused and held.
 
 ## Why a Storage interface instead of just using SQLite everywhere
 
 GitHub Pages is a *static* host — no server, no writable filesystem. A web build
 can't use a server-side SQLite file. So the browser stores data in IndexedDB
-instead. Rather than fork the logic, both back ends implement the same tiny
-`Storage` interface (6 card methods, 2 session methods, 2 slot methods). The
-core, the timer, the big button, and every view are then **identical** across CLI
-and web. Adding a cloud/sync backend later (Supabase) is *one more adapter* — see
-`EXTENDING.md`.
+instead. Rather than fork the logic, both back ends implement the same `Storage`
+interface (cards, timers, sessions, slot). The core, the timer, the big button,
+and every view are then **identical** across CLI and web. Adding a cloud/sync
+backend later (Supabase) is *one more adapter* — see `EXTENDING.md`.
 
 This seam is the single most important design decision in the project. Preserve it.
 

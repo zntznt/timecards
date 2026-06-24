@@ -1,9 +1,9 @@
 // Pure timer math. No I/O, no clock reads inside — `now` is always passed in.
 // This is what makes the state machine deterministic and trivially testable.
 
-import type { Session, SlotView, Card, RunState, TimerMode, DayCount, AlarmStyle } from "./types.ts";
+import type { Session, SlotView, Card, Timer, RunState, TimerMode, DayCount, AlarmStyle } from "./types.ts";
 
-/** Fallback alarm when a card doesn't specify one. */
+/** Fallback alarm when a timer doesn't specify one. */
 export const DEFAULT_ALARM: AlarmStyle = "chime";
 
 const DAY_MS = 86_400_000;
@@ -45,17 +45,26 @@ export function runState(session: Session | null, now: number): RunState {
   return "running";
 }
 
-/** Build the snapshot every interface renders from. */
-export function viewOf(card: Card | null, session: Session | null, now: number, locked = false): SlotView {
-  const alarmStyle = card?.alarmStyle ?? DEFAULT_ALARM;
+/** Build the snapshot every interface renders from.
+ *  The live session comes from the active timer (timer.liveSession). */
+export function viewOf(
+  card: Card | null,
+  timer: Timer | null,
+  timers: Timer[],
+  now: number,
+  locked = false,
+): SlotView {
+  const alarmStyle = timer?.alarmStyle ?? DEFAULT_ALARM;
   const dayCount = dayCountOf(card, now);
+  const session = timer?.liveSession ?? null;
+  const base = { card, timer, timers, alarmStyle, locked, dayCount };
   if (!card) {
-    return { state: "empty", card: null, elapsedMs: 0, remainingMs: null, mode: null,
-             finished: false, alarmStyle, locked, dayCount: null };
+    return { ...base, state: "empty", elapsedMs: 0, remainingMs: null, mode: null, finished: false };
   }
-  if (!session) {
-    return { state: "ready", card, elapsedMs: 0, remainingMs: null, mode: null,
-             finished: false, alarmStyle, locked, dayCount };
+  if (!timer || !session) {
+    // Card slotted but the active timer has no running session → ready (or, if the
+    // card has no timers at all, still "ready" but interfaces show "add a timer").
+    return { ...base, state: "ready", elapsedMs: 0, remainingMs: null, mode: timer?.mode ?? null, finished: false };
   }
   const e = elapsed(session, now);
   const finished = isFinished(session, now);
@@ -64,15 +73,12 @@ export function viewOf(card: Card | null, session: Session | null, now: number, 
       ? Math.max(0, session.targetMs - e)
       : null;
   return {
+    ...base,
     state: runState(session, now),
-    card,
     elapsedMs: e,
     remainingMs: remaining,
     mode: session.mode,
     finished,
-    alarmStyle,
-    locked,
-    dayCount,
   };
 }
 
@@ -83,6 +89,7 @@ export function viewOf(card: Card | null, session: Session | null, now: number, 
 export function startSession(
   id: string,
   cardId: string,
+  timerId: string,
   now: number,
   mode: TimerMode = "up",
   targetMs: number | null = null,
@@ -90,6 +97,7 @@ export function startSession(
   return {
     id,
     cardId,
+    timerId,
     mode,
     targetMs: mode === "down" ? targetMs : null,
     startedAt: now,

@@ -15,6 +15,7 @@
       <button id="lock-toggle" class="lock-toggle" title="lock the buttons" aria-label="lock">🔓</button>
 
       <div id="card-name" class="card-name">no card</div>
+      <div id="timer-name" class="timer-name"></div>
       <div id="daycount" class="daycount" hidden></div>
       <div id="readout" class="readout">00:00</div>
       <div id="sub" class="sub">slot a card to begin</div>
@@ -23,17 +24,18 @@
         <span id="big-label">●</span>
       </button>
 
-      <!-- Mode chooser shown only when a slotted card is idle (ready). -->
-      <div id="mode-row" class="mode-row" hidden>
-        <button class="chip" data-mode="up">stopwatch</button>
-        <button class="chip" data-mode="25">25 min</button>
-        <button class="chip" data-mode="50">50 min</button>
-        <button class="chip" data-mode="custom">custom…</button>
-      </div>
-
       <div class="row">
         <button id="stop" class="ghost" title="stop & save">stop</button>
         <button id="eject" class="ghost" title="remove card">eject</button>
+      </div>
+
+      <!-- The slotted card's timers. Tap to switch (suspends/resumes). -->
+      <div id="timers" class="timers" hidden>
+        <div class="timers-head">
+          <span>timers</span>
+          <button id="add-timer" class="add small">+ timer</button>
+        </div>
+        <ul id="timer-list" class="timer-list"></ul>
       </div>
     </section>
 
@@ -47,52 +49,47 @@
     </section>
   </main>
 
-  <!-- Card editor (create + edit). Hidden until opened. -->
-  <dialog id="editor" class="editor">
-    <form method="dialog" id="editor-form">
-      <h3 id="editor-title">New card</h3>
-
-      <label>Name<input id="f-name" type="text" required maxlength="40" placeholder="Writing" /></label>
-      <label>Category <span class="opt">(optional)</span><input id="f-category" type="text" maxlength="24" placeholder="hobby" /></label>
-      <label>Color<input id="f-color" type="color" value="#6ee7b7" /></label>
-
+  <!-- Card editor: name / category / color / deadline. -->
+  <dialog id="card-editor" class="editor">
+    <form method="dialog" id="card-form">
+      <h3 id="card-title">New card</h3>
+      <label>Name<input id="c-name" type="text" required maxlength="40" placeholder="Hobby" /></label>
+      <label>Category <span class="opt">(optional)</span><input id="c-category" type="text" maxlength="24" placeholder="hobby" /></label>
+      <label>Color<input id="c-color" type="color" value="#6ee7b7" /></label>
       <fieldset>
-        <legend>Default timer</legend>
-        <label class="radio"><input type="radio" name="mode" value="up" checked /> Stopwatch (count up)</label>
-        <label class="radio"><input type="radio" name="mode" value="down" /> Countdown</label>
-        <label class="indent">Length <input id="f-duration" type="text" placeholder="25 (min) or 1:30:00" /></label>
+        <legend>Deadline / streak <span class="opt">(optional)</span></legend>
+        <label class="indent">Date <input id="c-deadline" type="date" /></label>
+        <label class="radio"><input type="radio" name="dkind" value="until" checked /> Days until (countdown)</label>
+        <label class="radio"><input type="radio" name="dkind" value="since" /> Days since (streak)</label>
       </fieldset>
+      <div class="editor-actions">
+        <button type="button" id="card-cancel" class="ghost">cancel</button>
+        <button type="submit" class="add">save</button>
+      </div>
+    </form>
+  </dialog>
 
+  <!-- Timer editor: name / mode / duration / alarm. -->
+  <dialog id="timer-editor" class="editor">
+    <form method="dialog" id="timer-form">
+      <h3 id="timer-title">New timer</h3>
+      <label>Name<input id="t-name" type="text" required maxlength="40" placeholder="Deep work" /></label>
+      <fieldset>
+        <legend>Type</legend>
+        <label class="radio"><input type="radio" name="tmode" value="up" checked /> Stopwatch (count up)</label>
+        <label class="radio"><input type="radio" name="tmode" value="down" /> Countdown</label>
+        <label class="indent">Length <input id="t-duration" type="text" placeholder="25 (min) or 1:30:00" /></label>
+      </fieldset>
       <label>Alarm at zero
-        <select id="f-alarm">
+        <select id="t-alarm">
           <option value="chime">chime</option>
           <option value="blip">short blip</option>
           <option value="silent">silent (visual only)</option>
         </select>
       </label>
-
-      <fieldset>
-        <legend>Deadline / streak <span class="opt">(optional)</span></legend>
-        <label class="indent">Date <input id="f-deadline" type="date" /></label>
-        <label class="radio"><input type="radio" name="dkind" value="until" checked /> Days until (countdown)</label>
-        <label class="radio"><input type="radio" name="dkind" value="since" /> Days since (streak)</label>
-      </fieldset>
-
       <div class="editor-actions">
-        <button type="button" id="editor-cancel" class="ghost">cancel</button>
-        <button type="submit" id="editor-save" class="add">save</button>
-      </div>
-    </form>
-  </dialog>
-
-  <!-- Custom-duration mini prompt for the "custom…" chip. -->
-  <dialog id="dur-dialog" class="editor">
-    <form method="dialog">
-      <h3>Countdown length</h3>
-      <label>Minutes, or H:M:S<input id="dur-input" type="text" placeholder="25 or 1:30:00" autofocus /></label>
-      <div class="editor-actions">
-        <button type="button" id="dur-cancel" class="ghost">cancel</button>
-        <button type="submit" class="add">start</button>
+        <button type="button" id="timer-cancel" class="ghost">cancel</button>
+        <button type="submit" class="add">save</button>
       </div>
     </form>
   </dialog>

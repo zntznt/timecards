@@ -75,31 +75,38 @@ existing `slotByNfc`. That's the payoff of reserving `nfcUid` from day one.
   "card": {
     "id": "...", "name": "...", "category": null, "color": null,
     "nfcUid": null, "createdAt": 1700000000000,
-    "defaultMode": "up",        // 'up' | 'down' — what start does by default
-    "defaultTargetMs": null,    // countdown length when defaultMode is 'down'
-    "alarmStyle": "chime",      // 'chime' | 'blip' | 'silent'
+    "lastTimerId": "...",       // which timer loads when this card is slotted
     "deadline": null,           // epoch ms target date, or null
     "deadlineKind": "until"     // 'until' (countdown) | 'since' (streak)
   } | null,
-  "elapsedMs": 0,            // run time, pauses excluded
+  "timer": {                    // the ACTIVE timer on the slotted card, or null
+    "id": "...", "cardId": "...", "name": "Deep work",
+    "mode": "up|down", "targetMs": null, "alarmStyle": "chime",
+    "liveSession": { … } | null,  // its held in-progress session
+    "order": 0, "createdAt": 1700000000000
+  } | null,
+  "timers": [ /* all timers on the card, ordered — for the picker */ ],
+  "elapsedMs": 0,            // run time of the active session, pauses excluded
   "remainingMs": null,       // countdown only, else null
   "mode": "up|down" | null,
   "finished": false,         // true the instant a countdown hits 0 (alarm edge)
-  "alarmStyle": "chime",     // which alarm to play on finish (resolved from card)
+  "alarmStyle": "chime",     // alarm to play on finish (from the active timer)
   "locked": false,           // slot locked → presses ignored
   "dayCount": null           // { days, kind:'until'|'since', passed } if card has a deadline
 }
 ```
 
 A hardware bridge reads `finished` + `alarmStyle` to decide whether/how to sound an
-alarm, `locked` to show a lock LED, and `dayCount` for a "N days left" display.
+alarm, `locked` to show a lock LED, `dayCount` for a "N days left" display, and
+`timers` to render/select among a card's timers.
 
-`cards --json` → `{ "active": "<id|null>", "cards": [Card & {totalMs}] }`.
+`cards --json` → `{ "active": "<id|null>", "cards": [Card & {totalMs, timers}] }`.
+`timers [<card>] --json` → `{ "cardId", "activeTimerId", "timers": [Timer & {totalMs}] }`.
 `report --json` → `{ "report": [{ "id", "name", "totalMs" }] }`.
 
-The fields above are **additive** — older consumers that ignore the new keys keep
-working. Keep field names and meanings stable; downstream firmware depends on them.
+Keep field names and meanings stable; downstream firmware depends on them.
 
-New CLI verbs hardware can drive: `config` (set a card's default mode / countdown /
-alarm / deadline), `lock` / `unlock` (freeze the big button), and `press --down <dur>`
-/ `press --up` to override the card default for one session.
+CLI verbs hardware can drive: `timers` (list), `timer add|rm|switch|edit` (manage a
+card's timers), `slot` / `eject`, `press` / `stop`, `lock` / `unlock`, and `config`
+(card-level deadline/category/color). Switching a timer suspends the current one and
+resumes the target where it left off.

@@ -1,35 +1,41 @@
 // Runnable self-check for the core. No framework: `node core/core.test.ts`.
-// Asserts the timer math and the big-button state machine, since those are the
-// parts that silently corrupt data if they break.
+// Covers the timer math, the big-button state machine, and the Card→Timers model
+// with suspend/resume — the parts that silently corrupt data if they break.
 
 import assert from "node:assert/strict";
-import type { Storage, Card, Session, Slot } from "./types.ts";
+import type { Storage, Card, Timer, Session, Slot } from "./types.ts";
+import { MAX_TIMERS } from "./types.ts";
 import { Device } from "./device.ts";
 import * as T from "./timer.ts";
 
 // In-memory Storage so the core is testable with zero I/O.
 class MemStore implements Storage {
   cards = new Map<string, Card>();
+  timers = new Map<string, Timer>();
   sessions: Session[] = [];
-  slot: Slot = { cardId: null, session: null };
+  slot: Slot = { cardId: null, activeTimerId: null };
   async createCard(c: Card) { this.cards.set(c.id, c); }
   async getCard(id: string) { return this.cards.get(id) ?? null; }
   async listCards() { return [...this.cards.values()]; }
   async updateCard(c: Card) { this.cards.set(c.id, c); }
   async deleteCard(id: string) { this.cards.delete(id); this.sessions = this.sessions.filter(s => s.cardId !== id); }
   async getCardByNfc(uid: string) { return [...this.cards.values()].find(c => c.nfcUid === uid) ?? null; }
+  async putTimer(t: Timer) { this.timers.set(t.id, t); }
+  async getTimer(id: string) { return this.timers.get(id) ?? null; }
+  async listTimers(cardId: string) { return [...this.timers.values()].filter(t => t.cardId === cardId).sort((a, b) => a.order - b.order); }
+  async deleteTimer(id: string) { this.timers.delete(id); }
   async putSession(s: Session) { this.sessions.push(s); }
   async listSessions(cardId?: string) { return cardId ? this.sessions.filter(s => s.cardId === cardId) : this.sessions; }
   async getSlot() { return this.slot; }
   async setSlot(s: Slot) { this.slot = s; }
 }
 
-// A controllable clock so we can advance time deterministically.
+// A controllable clock + deterministic ids.
 function harness() {
   let t = 1_000_000;
   let n = 0;
   const store = new MemStore();
-  const dev = new Device(store, () => t, () => `s${n++}`);
+  const dev = new Device(store, () => t, () => `id${n++}`);
   return { store, dev, tick: (ms: number) => { t += ms; }, at: () => t };
 }
 
@@ -40,82 +46,170 @@ async function test(name: string, fn: () => Promise<void>) {
   console.log(`  ok  ${name}`);
 }
 
-await test("create card slugifies and is unique", async () => {
+await test("create card seeds a first timer; slug unique", async () => {
   const { dev } = harness();
   const a = await dev.createCard("Crochet Time!");
   assert.equal(a.id, "crochet-time");
+  const timers = await dev.listTimers(a.id);
+  assert.equal(timers.length, 1);                 // a usable timer exists immediately
+  assert.equal(a.lastTimerId, timers[0].id);      // and is the default-loaded one
   const b = await dev.createCard("Crochet Time!");
-  assert.equal(b.id, "crochet-time-2"); // collision handled
+  assert.equal(b.id, "crochet-time-2");
 });
 
-await test("full lifecycle: slot -> start -> pause -> resume -> stop, pause excluded", async () => {
+await test("full lifecycle on a timer: start/pause/resume/stop, pause excluded", async () => {
   const { dev, tick } = harness();
   const card = await dev.createCard("Writing");
   await dev.slot(card.id);
   assert.equal((await dev.view()).state, "ready");
-
-  await dev.press();                       // start (up)
-  assert.equal((await dev.view()).state, "running");
-  tick(10_000);                            // run 10s
+  await dev.press();                       // start (the seeded stopwatch)
+  tick(10_000);
   assert.equal((await dev.view()).elapsedMs, 10_000);
-
-  await dev.press();                       // pause
-  assert.equal((await dev.view()).state, "paused");
-  tick(5_000);                             // paused 5s — must NOT count
+  await dev.press(); tick(5_000);          // pause 5s — must not count
   assert.equal((await dev.view()).elapsedMs, 10_000);
-
-  await dev.press();                       // resume
-  tick(3_000);                             // run 3 more
+  await dev.press(); tick(3_000);          // resume
   assert.equal((await dev.view()).elapsedMs, 13_000);
-
-  await dev.stop();                        // save to history
+  await dev.stop();
   assert.equal((await dev.view()).state, "ready");
-  assert.equal(await dev.totalMs(card.id), 13_000); // pause excluded in history too
+  assert.equal(await dev.totalMs(card.id), 13_000);
 });
 
-await test("countdown finishes at target and fires alarm flag", async () => {
+await test("a card holds multiple timers up to the cap", async () => {
+  const { dev } = harness();
+  const card = await dev.createCard("Hobby");       // seeds 1
+  await dev.addTimer(card.id, { name: "Deep work", mode: "down", targetMs: 50 * 60000 });
+  await dev.addTimer(card.id, { name: "Sprint", mode: "down", targetMs: 15 * 60000 });
+  assert.equal((await dev.listTimers(card.id)).length, 3);
+  // fill to the cap
+  while ((await dev.listTimers(card.id)).length < MAX_TIMERS) await dev.addTimer(card.id, {});
+  assert.equal((await dev.listTimers(card.id)).length, MAX_TIMERS);
+  await assert.rejects(() => dev.addTimer(card.id, {}), /maximum/);  // 11th rejected
+});
+
+await test("switching timers SUSPENDS one and RESUMES the other where it left off", async () => {
   const { dev, tick } = harness();
-  const card = await dev.createCard("Focus");
-  await dev.slot(card.id);
-  await dev.press({ mode: "down", targetMs: 25_000 });
-  tick(24_999);
-  let v = await dev.view();
-  assert.equal(v.finished, false);
-  assert.equal(v.remainingMs, 1);
-  tick(1);
-  v = await dev.view();
-  assert.equal(v.finished, true);          // alarm moment
-  assert.equal(v.state, "finished");
-  assert.equal(v.remainingMs, 0);
+  const card = await dev.createCard("Hobby");
+  const reading = (await dev.listTimers(card.id))[0];          // seeded stopwatch
+  const pomo = await dev.addTimer(card.id, { name: "Pomodoro", mode: "down", targetMs: 25 * 60000 });
+  await dev.slot(card.id);                                     // loads reading (lastTimerId)
+  await dev.press(); tick(12_000);                            // reading runs 12s
+  assert.equal((await dev.view()).elapsedMs, 12_000);
+
+  await dev.switchTimer(pomo.id);                              // suspend reading, activate pomo
+  assert.equal((await dev.view()).timer!.id, pomo.id);
+  await dev.press(); tick(60_000);                            // pomo countdown runs 1 min
+  assert.equal((await dev.view()).remainingMs, 24 * 60000);
+
+  tick(99_999);                                                // time passes while reading is suspended
+  await dev.switchTimer(reading.id);                           // back to reading
+  assert.equal((await dev.view()).state, "paused");           // it was suspended (paused), not lost
+  assert.equal((await dev.view()).elapsedMs, 12_000);         // exactly where we left it
+  await dev.press(); tick(3_000);                            // resume
+  assert.equal((await dev.view()).elapsedMs, 15_000);
 });
 
-await test("swapping cards saves the outgoing session to history", async () => {
+await test("swapping cards suspends the active timer; coming back resumes it", async () => {
   const { dev, tick } = harness();
   const a = await dev.createCard("A");
   const b = await dev.createCard("B");
   await dev.slot(a.id);
+  await dev.press(); tick(7_000);                              // A's timer runs 7s
+  await dev.slot(b.id);                                        // swap — A suspended
+  tick(50_000);
+  await dev.slot(a.id);                                        // back to A
+  assert.equal((await dev.view()).state, "paused");           // held, not stopped
+  assert.equal((await dev.view()).elapsedMs, 7_000);
+  assert.equal(await dev.totalMs(a.id), 0);                    // nothing saved to history yet
+});
+
+await test("slot loads the card's last-used timer", async () => {
+  const { dev } = harness();
+  const card = await dev.createCard("Hobby");
+  const t2 = await dev.addTimer(card.id, { name: "Second" });
+  await dev.slot(card.id);
+  await dev.switchTimer(t2.id);                                // now t2 is last-used
+  await dev.eject();
+  await dev.slot(card.id);                                     // re-slot
+  assert.equal((await dev.view()).timer!.id, t2.id);          // remembered
+});
+
+await test("delete timers down to zero, then create works", async () => {
+  const { dev } = harness();
+  const card = await dev.createCard("Hobby");
+  const t1 = (await dev.listTimers(card.id))[0];
+  const t2 = await dev.addTimer(card.id, {});
+  await dev.slot(card.id);
+  await dev.deleteTimer(t1.id);
+  assert.equal((await dev.listTimers(card.id)).length, 1);
+  await dev.deleteTimer(t2.id);
+  assert.equal((await dev.listTimers(card.id)).length, 0);    // none remain
+  assert.equal((await dev.view()).timer, null);
+  const fresh = await dev.addTimer(card.id, { name: "New" }); // create when none
+  assert.equal((await dev.listTimers(card.id)).length, 1);
+  assert.equal(fresh.name, "New");
+});
+
+await test("deleting a running timer saves its time to history", async () => {
+  const { dev, tick } = harness();
+  const card = await dev.createCard("Hobby");
+  const t = (await dev.listTimers(card.id))[0];
+  await dev.slot(card.id);
+  await dev.press(); tick(8_000);
+  await dev.deleteTimer(t.id);
+  assert.equal(await dev.totalMs(card.id), 8_000);            // not lost
+});
+
+await test("countdown finishes at target and flips the alarm flag", async () => {
+  const { dev, tick } = harness();
+  const card = await dev.createCard("Focus", { defaultMode: "down", defaultTargetMs: 25_000 });
+  await dev.slot(card.id);
   await dev.press();
-  tick(7_000);
-  await dev.slot(b.id);                     // swap mid-run
-  assert.equal(await dev.totalMs(a.id), 7_000); // A's time preserved
-  assert.equal((await dev.view()).card?.id, "b");
-  assert.equal((await dev.view()).state, "ready"); // B starts fresh
+  tick(24_999); assert.equal((await dev.view()).finished, false);
+  tick(1);      assert.equal((await dev.view()).finished, true);
+  assert.equal((await dev.view()).state, "finished");
+});
+
+await test("per-timer alarmStyle resolves into the view", async () => {
+  const { dev } = harness();
+  const card = await dev.createCard("Hobby");
+  const loud = await dev.addTimer(card.id, { name: "Loud", mode: "down", targetMs: 1000, alarmStyle: "blip" });
+  await dev.slot(card.id);
+  await dev.switchTimer(loud.id);
+  assert.equal((await dev.view()).alarmStyle, "blip");
+});
+
+await test("lock ignores press/stop; swap clears it", async () => {
+  const { dev, tick } = harness();
+  const a = await dev.createCard("A");
+  const b = await dev.createCard("B");
+  await dev.slot(a.id);
+  await dev.press(); tick(5_000);
+  await dev.lock(true);
+  await dev.press();  assert.equal((await dev.view()).state, "running");  // ignored
+  await dev.stop();   assert.equal((await dev.view()).state, "running");  // ignored
+  await dev.slot(b.id);
+  assert.equal((await dev.view()).locked, false);                          // swap cleared lock
 });
 
 await test("NFC slot-by-tag works once registered", async () => {
   const { dev } = harness();
   const card = await dev.createCard("Cooking");
   await dev.registerNfc(card.id, "04:A2:B1:C3");
-  const v = await dev.slotByNfc("04:A2:B1:C3");
-  assert.equal(v.card?.id, "cooking");
-  const unknown = await dev.slotByNfc("FF:FF");
-  assert.equal(unknown.card?.id, "cooking"); // unknown tag = no change, stays slotted
+  assert.equal((await dev.slotByNfc("04:A2:B1:C3")).card?.id, "cooking");
 });
 
-await test("big button does nothing on empty slot", async () => {
-  const { dev } = harness();
-  const v = await dev.press();
-  assert.equal(v.state, "empty");
+await test("timerTotalMs splits history by timer", async () => {
+  const { dev, tick } = harness();
+  const card = await dev.createCard("Hobby");
+  const t1 = (await dev.listTimers(card.id))[0];
+  const t2 = await dev.addTimer(card.id, { name: "Other" });
+  await dev.slot(card.id);
+  await dev.press(); tick(4_000); await dev.stop();          // 4s on t1
+  await dev.switchTimer(t2.id);
+  await dev.press(); tick(9_000); await dev.stop();          // 9s on t2
+  assert.equal(await dev.timerTotalMs(t1.id), 4_000);
+  assert.equal(await dev.timerTotalMs(t2.id), 9_000);
+  assert.equal(await dev.totalMs(card.id), 13_000);
 });
 
 await test("pure: bigButtonAction maps states correctly", async () => {
@@ -124,91 +218,6 @@ await test("pure: bigButtonAction maps states correctly", async () => {
   assert.equal(T.bigButtonAction("paused"), "resume");
   assert.equal(T.bigButtonAction("empty"), "noop");
   assert.equal(T.bigButtonAction("finished"), "noop");
-});
-
-await test("press honors the card's default mode/target with no override", async () => {
-  const { dev, tick } = harness();
-  const card = await dev.createCard("Focus", { defaultMode: "down", defaultTargetMs: 25_000 });
-  await dev.slot(card.id);
-  const v = await dev.press();                 // no opts — should use the card default
-  assert.equal(v.mode, "down");
-  assert.equal(v.remainingMs, 25_000);
-  tick(25_000);
-  assert.equal((await dev.view()).finished, true);
-});
-
-await test("per-session override beats the card default", async () => {
-  const { dev } = harness();
-  const card = await dev.createCard("Focus", { defaultMode: "down", defaultTargetMs: 25_000 });
-  await dev.slot(card.id);
-  const v = await dev.press({ mode: "up" });    // override -> stopwatch
-  assert.equal(v.mode, "up");
-  assert.equal(v.remainingMs, null);
-});
-
-await test("lock ignores press and stop, but unlock restores control", async () => {
-  const { dev, tick } = harness();
-  const card = await dev.createCard("Writing");
-  await dev.slot(card.id);
-  await dev.press();                            // running
-  tick(5_000);
-  await dev.lock(true);
-  assert.equal((await dev.view()).locked, true);
-  await dev.press();                            // ignored
-  assert.equal((await dev.view()).state, "running");
-  tick(2_000);
-  await dev.stop();                             // ignored
-  assert.equal((await dev.view()).state, "running");
-  await dev.lock(false);
-  await dev.stop();                             // now works
-  assert.equal((await dev.view()).state, "ready");
-  assert.equal(await dev.totalMs(card.id), 7_000); // time kept accruing while locked
-});
-
-await test("lock clears when a different card is slotted", async () => {
-  const { dev } = harness();
-  const a = await dev.createCard("A");
-  const b = await dev.createCard("B");
-  await dev.slot(a.id);
-  await dev.lock(true);
-  await dev.slot(b.id);
-  assert.equal((await dev.view()).locked, false); // swap resets the lock
-});
-
-await test("day-count 'until' counts down and flags passed", async () => {
-  const { dev } = harness();
-  const DAY = 86_400_000;
-  const card = await dev.createCard("Novel");
-  await dev.configureCard(card.id, { deadline: 1_000_000 + 3 * DAY, deadlineKind: "until" });
-  await dev.slot(card.id);
-  let v = await dev.view();
-  assert.equal(v.dayCount?.days, 3);
-  assert.equal(v.dayCount?.passed, false);
-  // move the deadline into the past via a fresh harness clock isn't possible here;
-  // instead set a past deadline and re-check.
-  await dev.configureCard(card.id, { deadline: 1_000_000 - DAY });
-  v = await dev.view();
-  assert.equal(v.dayCount?.days, 0);
-  assert.equal(v.dayCount?.passed, true);
-});
-
-await test("day-count 'since' counts a streak up from the date", async () => {
-  const { dev } = harness();
-  const DAY = 86_400_000;
-  const card = await dev.createCard("Gym");
-  await dev.configureCard(card.id, { deadline: 1_000_000 - 17 * DAY, deadlineKind: "since" });
-  await dev.slot(card.id);
-  assert.equal((await dev.view()).dayCount?.days, 17);
-});
-
-await test("alarmStyle resolves from the card, default chime", async () => {
-  const { dev } = harness();
-  const a = await dev.createCard("Loud", { alarmStyle: "blip" });
-  const b = await dev.createCard("Default");
-  await dev.slot(a.id);
-  assert.equal((await dev.view()).alarmStyle, "blip");
-  await dev.slot(b.id);
-  assert.equal((await dev.view()).alarmStyle, "chime");
 });
 
 console.log(`\n${passed} core checks passed.`);

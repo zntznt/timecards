@@ -121,14 +121,31 @@ body {
 .ghost:hover:not(:disabled) { color: var(--ink); border-color: var(--muted); }
 .ghost:disabled { opacity: .35; cursor: not-allowed; }
 
-/* Mode chooser chips (shown when a card is ready). */
-.mode-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 0 0 16px; }
-.chip {
-  background: transparent; border: 1px solid var(--line); color: var(--muted);
-  border-radius: 999px; padding: 6px 14px; cursor: pointer; font-size: 13px;
+.timer-name { font-size: 13px; color: var(--muted); margin-top: 2px; min-height: 1.1em; }
+#device.running  .timer-name { color: var(--accent); }
+#device.paused   .timer-name { color: var(--accent-paused); }
+
+/* The slotted card's timer list. */
+.timers { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 14px; text-align: left; }
+.timers-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.timers-head span { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.add.small { padding: 4px 10px; font-size: 12px; }
+.timer-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.timer-row {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
+  padding: 9px 11px; cursor: pointer; font-size: 14px;
 }
-.chip:hover { color: var(--ink); border-color: var(--accent); }
-.chip.sel { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+.timer-row:hover { border-color: var(--muted); }
+.timer-row.active { border-color: var(--accent); background: #16221c; }
+.timer-row .t-nm { flex: 1; min-width: 0; font-weight: 600; }
+.timer-row .t-cfg { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.timer-row .t-live { font-size: 11px; }
+.timer-row .t-live.run { color: var(--accent); }
+.timer-row .t-live.held { color: var(--accent-paused); }
+.timer-row .t-del { background: transparent; border: none; color: var(--muted); cursor: pointer; opacity: .4; font-size: 14px; padding: 0 4px; }
+.timer-row .t-del:hover { color: var(--accent-done); opacity: 1; }
+.timers-empty { font-size: 13px; color: var(--muted); padding: 10px 4px; }
 
 /* ── Deck ───────────────────────────────────────────── */
 .deck-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }

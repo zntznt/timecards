@@ -10,6 +10,17 @@
 </head>
 <body>
   <main id="app">
+    <!-- Header: app name + view toggle -->
+    <header class="appbar">
+      <span class="brand">timecards</span>
+      <nav class="tabs">
+        <button id="tab-device" class="tab active">device</button>
+        <button id="tab-stats" class="tab">stats</button>
+      </nav>
+    </header>
+
+    <!-- DEVICE VIEW -->
+    <div id="view-device">
     <!-- The device: big button + current card readout -->
     <section id="device">
       <button id="lock-toggle" class="lock-toggle" title="lock the buttons" aria-label="lock">🔓</button>
@@ -47,6 +58,32 @@
       </div>
       <ul id="card-list" class="card-list"></ul>
     </section>
+    </div><!-- /view-device -->
+
+    <!-- STATS VIEW -->
+    <div id="view-stats" hidden>
+      <section class="stats-summary">
+        <div class="stat-big"><span id="s-total" class="stat-num">0m</span><span class="stat-lbl">total tracked</span></div>
+        <div class="stat-big"><span id="s-streak" class="stat-num">0</span><span class="stat-lbl">day streak 🔥</span></div>
+        <div class="stat-big"><span id="s-longest" class="stat-num">0</span><span class="stat-lbl">longest streak</span></div>
+        <div class="stat-big"><span id="s-active" class="stat-num">0</span><span class="stat-lbl">active days</span></div>
+      </section>
+
+      <section class="stats-block">
+        <h3>last 14 days</h3>
+        <div id="s-chart" class="chart"></div>
+      </section>
+
+      <section class="stats-block">
+        <h3>by card &amp; timer</h3>
+        <div id="s-breakdown" class="breakdown"></div>
+      </section>
+
+      <section class="stats-block">
+        <h3>recent sessions</h3>
+        <ul id="s-recent" class="recent-list"></ul>
+      </section>
+    </div><!-- /view-stats -->
   </main>
 
   <!-- Card editor: name / category / color / deadline. -->

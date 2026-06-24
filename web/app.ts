@@ -7,6 +7,7 @@ import { IdbStore } from "./idb-store.ts";
 import { fmtDuration } from "../core/format.ts";
 import { bigButtonAction } from "../core/timer.ts";
 import { MAX_TIMERS } from "../core/types.ts";
+import * as Stats from "../core/stats.ts";
 import type { SlotView, Card, Timer, TimerMode, AlarmStyle, DeadlineKind } from "../core/types.ts";
 
 const dev = new Device(new IdbStore());
@@ -30,6 +31,10 @@ const elList = $("card-list");
 const elAdd = $<HTMLButtonElement>("add-card");
 const elCardEditor = $<HTMLDialogElement>("card-editor");
 const elTimerEditor = $<HTMLDialogElement>("timer-editor");
+const elTabDevice = $<HTMLButtonElement>("tab-device");
+const elTabStats = $<HTMLButtonElement>("tab-stats");
+const elViewDevice = $("view-device");
+const elViewStats = $("view-stats");
 
 const GLYPH: Record<string, string> = { start: "▶", pause: "❚❚", resume: "▶", noop: "●" };
 
@@ -304,8 +309,98 @@ function isoDate(ms: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+// ── view toggle: device ⇆ stats ─────────────────────────────────
+let onStats = false;
+function showView(stats: boolean) {
+  onStats = stats;
+  elViewDevice.hidden = stats;
+  elViewStats.hidden = !stats;
+  elTabDevice.classList.toggle("active", !stats);
+  elTabStats.classList.toggle("active", stats);
+  if (stats) renderStats();
+}
+elTabDevice.onclick = () => showView(false);
+elTabStats.onclick = () => showView(true);
+
+// ── stats rendering ─────────────────────────────────────────────
+function shortDur(ms: number): string {
+  const m = Math.floor(ms / 60000), h = Math.floor(m / 60);
+  if (h > 0) return `${h}h ${m % 60}m`;
+  if (m > 0) return `${m}m`;
+  return `${Math.floor(ms / 1000)}s`;
+}
+
+async function renderStats() {
+  const { sessions, cards, timers, now } = await dev.statsData();
+  $("s-total").textContent = shortDur(Stats.totalMs(sessions, now));
+  const st = Stats.streaks(sessions, now);
+  $("s-streak").textContent = String(st.current);
+  $("s-longest").textContent = String(st.longest);
+  $("s-active").textContent = String(st.activeDays);
+
+  // Day chart.
+  const chart = $("s-chart"); chart.innerHTML = "";
+  const days = Stats.byDay(sessions, now, 14);
+  const maxDay = Math.max(1, ...days.map(d => d.ms));
+  const todayKey = days[days.length - 1].day;
+  for (const d of days) {
+    const row = document.createElement("div");
+    row.className = "chart-row" + (d.day === todayKey ? " today" : "");
+    const label = d.day.slice(5).replace("-", "/");
+    row.innerHTML = `<span class="c-day">${label}</span>` +
+      `<span class="chart-bar"><span style="width:${Math.round((d.ms / maxDay) * 100)}%"></span></span>` +
+      `<span class="c-val">${d.ms ? shortDur(d.ms) : ""}</span>`;
+    chart.appendChild(row);
+  }
+
+  // Breakdown by card → timer.
+  const bd = $("s-breakdown"); bd.innerHTML = "";
+  const byCard = Stats.totalsByCard(sessions, cards, timers, now);
+  if (byCard.length === 0) {
+    bd.innerHTML = `<div class="stats-empty">no tracked time yet — start a timer!</div>`;
+  } else {
+    const maxCard = byCard[0].ms || 1;
+    for (const c of byCard) {
+      const block = document.createElement("div"); block.className = "bd-card";
+      const head = document.createElement("div"); head.className = "bd-card-head";
+      head.innerHTML = `<span>${escapeHtml(c.name)}</span><span class="bd-ms">${shortDur(c.ms)}</span>`;
+      block.appendChild(head);
+      for (const t of c.timers) {
+        const row = document.createElement("div"); row.className = "bd-timer";
+        row.innerHTML = `<span>${escapeHtml(t.name)}</span>` +
+          `<span class="bt-bar"><span style="width:${Math.round((t.ms / maxCard) * 100)}%"></span></span>` +
+          `<span class="bt-ms">${shortDur(t.ms)}</span>`;
+        block.appendChild(row);
+      }
+      bd.appendChild(block);
+    }
+  }
+
+  // Recent sessions.
+  const rec = $("s-recent"); rec.innerHTML = "";
+  const recents = Stats.recent(sessions, cards, timers, now, 20);
+  if (recents.length === 0) {
+    const li = document.createElement("li"); li.className = "stats-empty"; li.textContent = "no sessions yet";
+    rec.appendChild(li);
+  } else {
+    for (const r of recents) {
+      const li = document.createElement("li"); li.className = "recent-item";
+      const when = new Date(r.session.startedAt);
+      li.innerHTML = `<span><strong>${escapeHtml(r.cardName)}</strong> / ${escapeHtml(r.timerName)}` +
+        `<br><span class="r-when">${when.toLocaleDateString()} ${when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></span>` +
+        `<span class="r-ms">${fmtDuration(r.ms)}</span>`;
+      rec.appendChild(li);
+    }
+  }
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
+}
+
 // ── tick: re-render the running readout 10×/sec so hundredths move ──
 setInterval(async () => {
+  if (onStats) return;                 // don't churn the stats DOM while it's open
   const v = await dev.view();
   if (v.state === "running" || v.state === "finished") await renderDevice();
 }, 100);

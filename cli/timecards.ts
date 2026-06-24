@@ -20,6 +20,7 @@
 import { Device, slugify } from "../core/device.ts";
 import { SqliteStore } from "../core/sqlite-store.ts";
 import { fmtDuration } from "../core/format.ts";
+import * as Stats from "../core/stats.ts";
 import type { SlotView, Card, Timer, TimerMode, AlarmStyle, DeadlineKind } from "../core/types.ts";
 
 // ── arg parsing (tiny, no dependency) ───────────────────────────
@@ -89,6 +90,13 @@ function timerLine(t: Timer, activeId: string | null | undefined, totalMs: numbe
   const cfg = t.mode === "down" && t.targetMs ? `⏲ ${fmtDuration(t.targetMs)}` : "stopwatch";
   const live = t.liveSession ? (t.liveSession.pausedAt !== null ? " ⏸ held" : " ▶ running") : "";
   return `${mark} ${t.name.padEnd(18)} ${cfg.padEnd(12)} ${fmtDuration(totalMs)} total  🔔${t.alarmStyle}${live}`;
+}
+
+/** A unicode block bar scaled to `max`, width 16. For terminal stats charts. */
+function sparkBar(value: number, max: number, width = 16): string {
+  if (max <= 0) return "";
+  const filled = Math.round((value / max) * width);
+  return "█".repeat(filled) + "·".repeat(Math.max(0, width - filled));
 }
 
 /** Resolve a user-typed timer ref (name or id) within a card. */
@@ -292,6 +300,30 @@ try {
       }
       break;
     }
+    case "stats": {
+      const { sessions, cards, timers, now } = await dev.statsData();
+      const filterId = argv[0] ? await resolveCardId(dev, argv[0]) : null;
+      const scope = filterId ? sessions.filter(s => s.cardId === filterId) : sessions;
+      const byCard = Stats.totalsByCard(scope, cards, timers, now);
+      const days = Stats.byDay(scope, now, 14);
+      const st = Stats.streaks(scope, now);
+      const recent = Stats.recent(scope, cards, timers, now, 10);
+      if (json) { out("", { totalMs: Stats.totalMs(scope, now), byCard, byDay: days, streaks: st, recent }); break; }
+
+      console.log(`total: ${fmtDuration(Stats.totalMs(scope, now))}   🔥 streak ${st.current}d (longest ${st.longest}d, ${st.activeDays} active days)\n`);
+      for (const c of byCard) {
+        console.log(`${c.name}  —  ${fmtDuration(c.ms)}  (${c.sessions} sessions)`);
+        for (const t of c.timers) console.log(`   ${t.name.padEnd(18)} ${fmtDuration(t.ms)}  ${sparkBar(t.ms, byCard[0]?.ms || 1)}`);
+      }
+      console.log(`\nlast 14 days:`);
+      const max = Math.max(1, ...days.map(d => d.ms));
+      for (const d of days) console.log(`  ${d.day.slice(5)}  ${sparkBar(d.ms, max)}  ${d.ms ? fmtDuration(d.ms) : ""}`);
+      if (recent.length) {
+        console.log(`\nrecent:`);
+        for (const r of recent) console.log(`  ${r.cardName}/${r.timerName}`.padEnd(28) + `  ${fmtDuration(r.ms).padStart(8)}  ${r.session.startedAt ? new Date(r.session.startedAt).toLocaleString() : ""}`);
+      }
+      break;
+    }
     case "nfc": {
       const [id, uid] = [argv[0], argv[1]];
       if (!id || !uid) die(`usage: timecards nfc <card-id> <tag-uid>`);
@@ -348,6 +380,7 @@ DEVICE
   eject                                          remove the card (suspends its timer)
   status                                         what's slotted & running
   report [<id>]                                  total tracked time
+  stats [<id>]                                   totals, streaks, by-day, recent
 
   <dur> = minutes (25) or H:M:S (1:30:00). Switching timers suspends one and
   resumes another where it left off. Add --json for machine-readable output.`);

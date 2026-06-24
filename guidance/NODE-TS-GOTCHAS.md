@@ -26,6 +26,12 @@ build (`web/build.ts`) rewrites `.ts` → `.js` for the browser. In Node, `.ts`
 specifiers resolve directly. **Don't drop the extension** — extensionless imports
 fail.
 
+The build **auto-discovers** `core/*.ts` to transpile for the browser, excluding
+`*.test.ts` and `sqlite-store.ts` (it imports `node:sqlite`, not browser-safe). So a
+new browser-safe core module is picked up automatically — but if you add a core
+module that uses a Node-only API, add it to the exclude list in `web/build.ts` or the
+browser build will 404 on it at runtime.
+
 ## Web build: import paths must not climb above the publish root
 
 `web/app.ts` lives in `web/` and imports `../core/…` — correct for the source tree.

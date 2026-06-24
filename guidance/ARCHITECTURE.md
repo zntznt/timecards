@@ -72,10 +72,11 @@ startedAt - pausedMs - currentPause`. Consequences:
 |-------------------------|-------------------------------------------------------------|
 | `core/types.ts`         | Data model + the `Storage` contract. The source of truth.   |
 | `core/timer.ts`         | Pure timer math + `bigButtonAction`. No I/O.                 |
-| `core/device.ts`        | `Device` — the API interfaces drive.                        |
+| `core/device.ts`        | `Device` — the API interfaces drive. `statsData()` feeds stats.|
 | `core/format.ts`        | `fmtDuration(ms)` shared by CLI + web.                       |
+| `core/stats.ts`         | Pure stats over sessions (totals, by-day, streaks, recent). |
 | `core/sqlite-store.ts`  | `Storage` over `node:sqlite`. CLI + Pi.                      |
-| `core/core.test.ts`     | Runnable self-check. Run after any `core/` edit.            |
+| `core/*.test.ts`        | Runnable self-checks (`npm test`). Run after any `core/` edit.|
 | `cli/timecards.ts`      | The CLI. Big button from a terminal; `--json` for hardware.  |
 | `web/idb-store.ts`      | `Storage` over IndexedDB. Browser only.                     |
 | `web/app.ts`            | The web UI logic.                                           |

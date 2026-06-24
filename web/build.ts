@@ -14,10 +14,13 @@ const out = join(root, "docs");
 mkdirSync(out, { recursive: true });
 mkdirSync(join(out, "core"), { recursive: true });
 
-// The browser entry pulls in these modules. We transpile each to .js and
-// rewrite imports. We DON'T touch sqlite-store.ts (it imports node:sqlite — not browser-safe).
+// The browser entry pulls in the core modules. We transpile each to .js and
+// rewrite imports. Auto-discover every core/*.ts EXCEPT the ones that can't run in
+// a browser (sqlite-store imports node:sqlite) or aren't shipped (*.test.ts). This
+// avoids the trap of forgetting to add a new core module to a hardcoded list.
 const webFiles = ["app.ts", "idb-store.ts"];
-const coreFiles = ["types.ts", "timer.ts", "device.ts", "format.ts"]; // pure, browser-safe
+const coreFiles = readdirSync(join(root, "core"))
+  .filter(f => f.endsWith(".ts") && !f.endsWith(".test.ts") && f !== "sqlite-store.ts");
 
 function transpile(srcPath: string, isWebEntry = false): string {
   const ts = readFileSync(srcPath, "utf8");

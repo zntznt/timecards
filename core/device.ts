@@ -309,6 +309,15 @@ export class Device {
     return sessions.filter(s => s.timerId === timerId).reduce((sum, s) => sum + T.elapsed(s, this.now()), 0);
   }
 
+  /** Gather everything the stats functions need: all sessions + all cards + all
+   *  timers. The caller runs core/stats.ts functions over the result. */
+  async statsData(): Promise<{ sessions: Session[]; cards: Card[]; timers: Timer[]; now: number }> {
+    const cards = await this.store.listCards();
+    const sessions = await this.store.listSessions();
+    const timers = (await Promise.all(cards.map(c => this.store.listTimers(c.id)))).flat();
+    return { sessions, cards, timers, now: this.now() };
+  }
+
   // ── internals ──────────────────────────────────────────────────
 
   /** Pause (suspend) the slot's active timer if it's running — keeps it on the timer. */

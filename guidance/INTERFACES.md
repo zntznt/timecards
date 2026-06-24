@@ -107,6 +107,7 @@ alarm, `locked` to show a lock LED, `dayCount` for a "N days left" display, and
 Keep field names and meanings stable; downstream firmware depends on them.
 
 CLI verbs hardware can drive: `timers` (list), `timer add|rm|switch|edit` (manage a
-card's timers), `slot` / `eject`, `press` / `stop`, `lock` / `unlock`, and `config`
-(card-level deadline/category/color). Switching a timer suspends the current one and
-resumes the target where it left off.
+card's timers), `slot` / `eject`, `press` / `stop` / `repeat`, `lock` / `unlock`,
+`stats`, and `config` (card-level deadline/category/color). Switching a timer
+suspends the current one and resumes the target where it left off. `repeat` (or
+`press` when `finished`) re-runs the same countdown, saving the completed round.

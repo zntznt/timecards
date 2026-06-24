@@ -169,6 +169,44 @@ await test("countdown finishes at target and flips the alarm flag", async () => 
   assert.equal((await dev.view()).state, "finished");
 });
 
+await test("repeat: finished countdown re-runs at the same duration, saving the round", async () => {
+  const { dev, tick } = harness();
+  const card = await dev.createCard("Focus", { defaultMode: "down", defaultTargetMs: 25_000 });
+  await dev.slot(card.id);
+  await dev.press();                         // start round 1
+  tick(25_000);
+  assert.equal((await dev.view()).state, "finished");
+
+  await dev.repeat();                         // round 2
+  const v = await dev.view();
+  assert.equal(v.state, "running");           // fresh session running
+  assert.equal(v.remainingMs, 25_000);        // same target
+  assert.equal(await dev.totalMs(card.id), 25_000); // round 1 saved to history
+  assert.equal((await dev.listSessions(card.id)).length, 1);
+});
+
+await test("repeat via the big button when finished", async () => {
+  const { dev, tick } = harness();
+  const card = await dev.createCard("Focus", { defaultMode: "down", defaultTargetMs: 10_000 });
+  await dev.slot(card.id);
+  await dev.press();                          // start
+  tick(10_000);                               // finishes
+  await dev.press();                          // press while finished -> repeat
+  assert.equal((await dev.view()).state, "running");
+  assert.equal((await dev.view()).remainingMs, 10_000);
+  assert.equal(await dev.totalMs(card.id), 10_000);
+});
+
+await test("repeat preserves an overridden duration, not the timer default", async () => {
+  const { dev, tick } = harness();
+  const card = await dev.createCard("Focus", { defaultMode: "down", defaultTargetMs: 25_000 });
+  await dev.slot(card.id);
+  await dev.press({ mode: "down", targetMs: 5_000 });  // override: 5s round, not the 25s default
+  tick(5_000);
+  await dev.repeat();
+  assert.equal((await dev.view()).remainingMs, 5_000);  // repeats the 5s round, not 25s
+});
+
 await test("per-timer alarmStyle resolves into the view", async () => {
   const { dev } = harness();
   const card = await dev.createCard("Hobby");

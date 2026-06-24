@@ -8,9 +8,10 @@ start, pause, and resume. Each card keeps its own time, separately. Swap a card 
 its data swaps in.
 
 Each card can be an open **stopwatch** or a **countdown** (with a **chime / blip /
-silent alarm** when it hits zero), can carry a **deadline or streak** ("42 days
-left", "day 17"), and you can **lock** the device so a stray tap won't stop your
-session.
+silent alarm** when it hits zero, and one-press **repeat** to run the same round
+again), can carry a **deadline or streak** ("42 days left", "day 17"), and you can
+**lock** the device so a stray tap won't stop your session. A **stats** view shows
+totals, a daily chart, streaks, and recent sessions.
 
 There's a **web app**, a **command line**, and a data model built to be read by a
 **Raspberry Pi or Arduino** — even to recognize **NFC tags** like amiibos, so you

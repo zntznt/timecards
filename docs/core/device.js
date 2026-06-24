@@ -237,7 +237,8 @@ export class Device {
   // ── The big button ─────────────────────────────────────────────
 
   /** One press, on the ACTIVE timer:
-   *  ready -> start (using the timer's mode/target), running -> pause, paused -> resume.
+   *  ready -> start (using the timer's mode/target), running -> pause, paused -> resume,
+   *  finished -> repeat (save the round, restart it at the same duration).
    *  Ignored while locked or when there's no active timer. */
   async press(opts                                          = {})                    {
     const slot = await this.store.getSlot();
@@ -260,8 +261,27 @@ export class Device {
       case "resume":
         await this.store.putTimer({ ...timer, liveSession: T.resume(timer.liveSession , now) });
         break;
-      // noop: finished — press does nothing; caller uses stop().
+      case "noop":
+        // finished — pressing again repeats the round (device's repeat function).
+        if (timer.liveSession && T.runState(timer.liveSession, now) === "finished") return this.repeat();
+        break;
     }
+    return this.view();
+  }
+
+  /** Repeat: save the active timer's finished (or in-progress) session to history,
+   *  then start a fresh session at the SAME mode/duration as the one that just ran.
+   *  This is the device's "repeat" — one action begins the next identical round. */
+  async repeat()                    {
+    const slot = await this.store.getSlot();
+    if (slot.locked || !slot.activeTimerId) return this.view();
+    const timer = await this.store.getTimer(slot.activeTimerId);
+    if (!timer || !timer.liveSession) return this.view(); // nothing to repeat
+    const prev = timer.liveSession;
+    await this.finalize(prev);                              // save the round
+    const now = this.now();
+    const next = T.startSession(this.newId(), timer.cardId, timer.id, now, prev.mode, prev.targetMs);
+    await this.store.putTimer({ ...timer, liveSession: next });
     return this.view();
   }
 

@@ -33,8 +33,8 @@ Per-timer history totals: `device.timerTotalMs(id)`; whole-card: `device.totalMs
 ```
  empty ──slot card──▶ ready ──press──▶ running ⇄ paused
                         ▲                  │
-                        │                  ├─(countdown hits target)─▶ finished
-                        └──── stop ────────┴──────────────────────────┘
+                        │                  ├─(countdown hits target)─▶ finished ──press──▶ repeat
+                        └──── stop ────────┴──────────────────────────┘    (same round again)
                                   (session saved to history)
 ```
 
@@ -42,8 +42,18 @@ Per-timer history totals: `device.timerTotalMs(id)`; whole-card: `device.totalMs
 - **ready** — card slotted, no session running. Press → start.
 - **running** — a session is counting. Press → pause.
 - **paused** — session frozen; paused time won't count. Press → resume.
-- **finished** — a *countdown* reached its target (alarm moment). The big button
-  is inert here; the user presses **stop** to save. Count-up never auto-finishes.
+- **finished** — a *countdown* reached its target (alarm moment). Press → **repeat**
+  (`device.repeat()`): the finished round is saved to history and a fresh session
+  starts at the SAME mode/duration. Or **stop** to just save and go idle. Count-up
+  never auto-finishes.
+
+## Repeat (`device.repeat()`)
+
+Re-runs the active timer's just-finished round in one action — the device's "repeat"
+function. It restarts at the duration of the session that *just ran* (`prev.mode` /
+`prev.targetMs`), not the timer's current config — so it faithfully repeats "the
+thing I just did," including a one-off `press` override. The big button calls it
+automatically when the state is `finished`; the CLI has `repeat`.
 
 ## The big button (`bigButtonAction`)
 
@@ -54,6 +64,7 @@ One function maps the current state to the single action a press performs:
 | ready    | **start** |
 | running  | **pause** |
 | paused   | **resume**|
+| finished | **repeat** (via `device.press` → `repeat`) |
 | empty    | nothing   |
 | finished | nothing (use stop) |
 

@@ -276,6 +276,11 @@ try {
       out(viewLine(v), v);
       break;
     }
+    case "repeat": case "again": {
+      const v = await dev.repeat();
+      out(viewLine(v), v);
+      break;
+    }
     case "eject": {
       const v = await dev.eject();
       out(viewLine(v), v);
@@ -375,7 +380,9 @@ TIMERS (a card holds up to 10)
 DEVICE
   slot <id|name> | slot --nfc <uid>              put a card in the device
   press [--down <dur>] [--up]                    the big button: start / pause / resume
+                                                 (press when finished = repeat)
   stop                                           stop & save the active timer's session
+  repeat                                         re-run the same countdown (saves the round)
   lock | unlock                                  freeze / unfreeze the big button
   eject                                          remove the card (suspends its timer)
   status                                         what's slotted & running

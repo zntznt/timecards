@@ -101,19 +101,20 @@ async function renderDevice() {
     return;
   }
   elTimerName.textContent = v.timer.name;
-  elBig.disabled = v.locked || v.state === "finished";
+  // When finished, the big button stays active and REPEATS the round (press()).
+  elBig.disabled = v.locked;
 
   if (v.mode === "down" && v.remainingMs !== null) elReadout.textContent = fmtDuration(v.remainingMs);
   else if (v.mode === "up") elReadout.textContent = fmtDuration(v.elapsedMs, true);
   else elReadout.textContent = v.timer.mode === "down" && v.timer.targetMs ? fmtDuration(v.timer.targetMs) : "00:00";
 
-  elBigLabel.textContent = GLYPH[bigButtonAction(v.state)] ?? "●";
+  elBigLabel.textContent = v.state === "finished" ? "↻" : (GLYPH[bigButtonAction(v.state)] ?? "●");
 
   if (v.state === "ready") { elSub.textContent = "press to start"; elStop.disabled = true; }
   else if (v.state === "running") { elSub.textContent = v.mode === "down" ? "counting down…" : "tracking…"; elStop.disabled = false; }
   else if (v.state === "paused") { elSub.textContent = "paused"; elStop.disabled = false; }
   else if (v.state === "finished") {
-    elSub.textContent = "time's up — press stop to save"; elStop.disabled = false;
+    elSub.textContent = "time's up — press ↻ to repeat · stop to save"; elStop.disabled = false;
     const key = v.timer.id + ":" + (v.timer.liveSession?.id ?? "");
     if (alarmedFor !== key) { alarmedFor = key; playAlarm(v.alarmStyle); }
   }

@@ -28,21 +28,18 @@ timecards status --json
 timecards slot --nfc 04:A2:B1:C3 --json
 ```
 
-### Raspberry Pi (recommended hardware host)
+### Raspberry Pi (recommended hardware host) — BUILT
 
-A Pi runs Node, so it runs timecards directly. Wire a physical button to a GPIO
-pin; on press, shell out:
+A working reference driver ships in **`integrations/pi/`** (`timecards_pi.py` +
+README + an off-Pi self-check). It's pure glue: a GPIO button (tap = `press`, hold =
+`stop`), a status LED driven from `status --json`, and an optional PN532-over-I2C NFC
+reader that calls `slot --nfc <uid>` on tap (degrades to button-only if absent). It
+shells out to the CLI — never reimplements timer logic — so it can't drift from the
+app. See `integrations/pi/README.md` for wiring + systemd autostart.
 
-```python
-# pseudo — on button-down
-subprocess.run(["node", "/opt/timecards/cli/timecards.ts", "press", "--json"])
-```
-
-Read `status --json` on a loop to drive an LED (green=running, amber=paused) or a
-small display. The `~/.timecards/data.db` file is the shared truth — the web UI on
-the same Pi (served from `docs/`) sees the same data **if** they share a backend.
-(Browser IndexedDB and the Pi's SQLite are separate stores; bridge them via
-export/import or a shared SupabaseStore — see `EXTENDING.md`.)
+The `~/.timecards/data.db` file is the shared truth between the Pi and the CLI. The
+web UI keeps its data in the browser's IndexedDB and does NOT share it; bridge them
+via export/import or a shared SupabaseStore — see `EXTENDING.md`.
 
 ### Arduino (needs a host)
 

@@ -26,6 +26,26 @@ build (`web/build.ts`) rewrites `.ts` → `.js` for the browser. In Node, `.ts`
 specifiers resolve directly. **Don't drop the extension** — extensionless imports
 fail.
 
+## Web build: import paths must not climb above the publish root
+
+`web/app.ts` lives in `web/` and imports `../core/…` — correct for the source tree.
+But `web/build.ts` **flattens** the web entry to the publish root (`docs/app.js`,
+next to `docs/core/`). After flattening, `../core/` climbs ABOVE `docs/`, which is
+fatal when the site is served from a **subpath** (GitHub Pages at
+`zntznt.com/timecards/`): the import resolves to `/core/…`, 404s, the module never
+finishes, and **no event handlers attach — the whole UI becomes unclickable** with
+no obvious error.
+
+The build rewrites `../core/` → `./core/` for web entry files (see `isWebEntry` in
+`web/build.ts`). If you add a new web entry that imports core, route it through that
+same rewrite.
+
+**Test like production:** serving `docs/` AS the server root hides this bug (because
+`../core` accidentally resolves). Instead serve the repo root and visit `/docs/`
+(`python3 -m http.server 8500` then `localhost:8500/docs/index.html`) so the app
+loads under a subpath, exactly like Pages. Verify handlers attached:
+`typeof document.getElementById('add-card').onclick === 'function'`.
+
 ## node:sqlite specifics
 
 - Built in on Node 22+ (`import { DatabaseSync } from "node:sqlite"`). On older

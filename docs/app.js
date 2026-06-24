@@ -2,10 +2,10 @@
 // countdown, alarm, deadline/day-count, lock, and the card editor.
 // Same Device + timer logic as the CLI — only the storage adapter (IndexedDB) differs.
 
-import { Device } from "../core/device.js";
+import { Device } from "./core/device.js";
 import { IdbStore } from "./idb-store.js";
-import { fmtDuration } from "../core/format.js";
-import { bigButtonAction } from "../core/timer.js";
+import { fmtDuration } from "./core/format.js";
+import { bigButtonAction } from "./core/timer.js";
                                                                                             
 
 const dev = new Device(new IdbStore());

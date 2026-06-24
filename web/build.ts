@@ -19,18 +19,24 @@ mkdirSync(join(out, "core"), { recursive: true });
 const webFiles = ["app.ts", "idb-store.ts"];
 const coreFiles = ["types.ts", "timer.ts", "device.ts", "format.ts"]; // pure, browser-safe
 
-function transpile(srcPath: string): string {
+function transpile(srcPath: string, isWebEntry = false): string {
   const ts = readFileSync(srcPath, "utf8");
   const js = stripTypeScriptTypes(ts, { mode: "strip" });
   // Rewrite relative .ts specifiers -> .js (browsers require explicit .js extensions).
-  return js.replace(/(from\s+["'][^"']+?)\.ts(["'])/g, "$1.js$2");
+  let out = js.replace(/(from\s+["'][^"']+?)\.ts(["'])/g, "$1.js$2");
+  // Web entry files live in web/ (so they import ../core), but the build FLATTENS
+  // them to the publish root (docs/app.js) next to docs/core/. After flattening,
+  // ../core climbs above the publish root — fatal on a subpath host like GitHub
+  // Pages (zntznt.com/timecards/). Rewrite ../core -> ./core so it resolves.
+  if (isWebEntry) out = out.replace(/(from\s+["'])\.\.\/core\//g, "$1./core/");
+  return out;
 }
 
 for (const f of coreFiles) {
   writeFileSync(join(out, "core", f.replace(/\.ts$/, ".js")), transpile(join(root, "core", f)));
 }
 for (const f of webFiles) {
-  writeFileSync(join(out, f.replace(/\.ts$/, ".js")), transpile(join(root, "web", f)));
+  writeFileSync(join(out, f.replace(/\.ts$/, ".js")), transpile(join(root, "web", f), true));
 }
 
 // Static assets copied as-is.

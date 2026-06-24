@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>timecards</title>
+  <!-- Inline SVG favicon: a stopwatch dot. Avoids a 404 with no asset file. -->
+  <link rel="icon" href="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'&gt;&lt;circle cx='8' cy='9' r='5' fill='none' stroke='%236ee7b7' stroke-width='1.5'/&gt;&lt;rect x='6.5' y='1' width='3' height='1.6' fill='%236ee7b7'/&gt;&lt;line x1='8' y1='9' x2='8' y2='6' stroke='%236ee7b7' stroke-width='1.2'/&gt;&lt;/svg&gt;" />
+  <link rel="stylesheet" href="./app.css" />
+</head>
+<body>
+  <main id="app">
+    <!-- The device: big button + current card readout -->
+    <section id="device">
+      <button id="lock-toggle" class="lock-toggle" title="lock the buttons" aria-label="lock">🔓</button>
+
+      <div id="card-name" class="card-name">no card</div>
+      <div id="daycount" class="daycount" hidden></div>
+      <div id="readout" class="readout">00:00</div>
+      <div id="sub" class="sub">slot a card to begin</div>
+
+      <button id="big-button" class="big-button" aria-label="start, pause, or resume">
+        <span id="big-label">●</span>
+      </button>
+
+      <!-- Mode chooser shown only when a slotted card is idle (ready). -->
+      <div id="mode-row" class="mode-row" hidden>
+        <button class="chip" data-mode="up">stopwatch</button>
+        <button class="chip" data-mode="25">25 min</button>
+        <button class="chip" data-mode="50">50 min</button>
+        <button class="chip" data-mode="custom">custom…</button>
+      </div>
+
+      <div class="row">
+        <button id="stop" class="ghost" title="stop & save">stop</button>
+        <button id="eject" class="ghost" title="remove card">eject</button>
+      </div>
+    </section>
+
+    <!-- The deck: your cards. Click to slot, ✎ to edit. -->
+    <section id="deck">
+      <div class="deck-head">
+        <h2>deck</h2>
+        <button id="add-card" class="add">+ new card</button>
+      </div>
+      <ul id="card-list" class="card-list"></ul>
+    </section>
+  </main>
+
+  <!-- Card editor (create + edit). Hidden until opened. -->
+  <dialog id="editor" class="editor">
+    <form method="dialog" id="editor-form">
+      <h3 id="editor-title">New card</h3>
+
+      <label>Name<input id="f-name" type="text" required maxlength="40" placeholder="Writing" /></label>
+      <label>Category <span class="opt">(optional)</span><input id="f-category" type="text" maxlength="24" placeholder="hobby" /></label>
+      <label>Color<input id="f-color" type="color" value="#6ee7b7" /></label>
+
+      <fieldset>
+        <legend>Default timer</legend>
+        <label class="radio"><input type="radio" name="mode" value="up" checked /> Stopwatch (count up)</label>
+        <label class="radio"><input type="radio" name="mode" value="down" /> Countdown</label>
+        <label class="indent">Length <input id="f-duration" type="text" placeholder="25 (min) or 1:30:00" /></label>
+      </fieldset>
+
+      <label>Alarm at zero
+        <select id="f-alarm">
+          <option value="chime">chime</option>
+          <option value="blip">short blip</option>
+          <option value="silent">silent (visual only)</option>
+        </select>
+      </label>
+
+      <fieldset>
+        <legend>Deadline / streak <span class="opt">(optional)</span></legend>
+        <label class="indent">Date <input id="f-deadline" type="date" /></label>
+        <label class="radio"><input type="radio" name="dkind" value="until" checked /> Days until (countdown)</label>
+        <label class="radio"><input type="radio" name="dkind" value="since" /> Days since (streak)</label>
+      </fieldset>
+
+      <div class="editor-actions">
+        <button type="button" id="editor-cancel" class="ghost">cancel</button>
+        <button type="submit" id="editor-save" class="add">save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Custom-duration mini prompt for the "custom…" chip. -->
+  <dialog id="dur-dialog" class="editor">
+    <form method="dialog">
+      <h3>Countdown length</h3>
+      <label>Minutes, or H:M:S<input id="dur-input" type="text" placeholder="25 or 1:30:00" autofocus /></label>
+      <div class="editor-actions">
+        <button type="button" id="dur-cancel" class="ghost">cancel</button>
+        <button type="submit" class="add">start</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

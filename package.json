@@ -1,0 +1,18 @@
+{
+  "name": "timecards",
+  "version": "0.1.0",
+  "description": "Remember study timers? They're back! In card form.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "timecards": "./cli/timecards.ts"
+  },
+  "scripts": {
+    "cli": "node cli/timecards.ts",
+    "test": "node core/core.test.ts",
+    "build:web": "node web/build.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

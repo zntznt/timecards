@@ -134,6 +134,16 @@ export const MAX_TIMERS = 10;
                             
  
 
+/** A full dataset snapshot for backup or moving between storage backends. */
+                                  
+             
+                     
+                
+                  
+                      
+             
+ 
+
 /** Storage contract. SQLite (CLI/Pi) and IndexedDB (web) each implement this.
  *  Deliberately tiny: the core holds all logic, adapters only persist. */
                           

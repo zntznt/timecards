@@ -17,6 +17,7 @@
         <button id="tab-device" class="tab active">device</button>
         <button id="tab-stats" class="tab">stats</button>
       </nav>
+      <button id="settings-btn" class="icon-btn" title="settings (sync)" aria-label="settings">⚙</button>
     </header>
 
     <!-- DEVICE VIEW -->
@@ -127,6 +128,25 @@
       <div class="editor-actions">
         <button type="button" id="timer-cancel" class="ghost">cancel</button>
         <button type="submit" class="add">save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Settings: optional Supabase sync. Paste your project URL + anon key. -->
+  <dialog id="settings-editor" class="editor">
+    <form method="dialog" id="settings-form">
+      <h3>Cloud sync (optional)</h3>
+      <p class="settings-note">
+        Sync this browser with the CLI / Raspberry Pi via your own Supabase project.
+        Leave blank to keep data only in this browser. Run the schema first
+        (<code>integrations/supabase/schema.sql</code>).
+      </p>
+      <label>Supabase URL<input id="sb-url" type="url" placeholder="https://xxxx.supabase.co" /></label>
+      <label>Anon key<input id="sb-key" type="text" placeholder="eyJ…" /></label>
+      <p id="sb-status" class="settings-note"></p>
+      <div class="editor-actions">
+        <button type="button" id="sb-clear" class="ghost">use local only</button>
+        <button type="submit" class="add">save &amp; reload</button>
       </div>
     </form>
   </dialog>

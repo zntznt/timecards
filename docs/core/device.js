@@ -6,7 +6,7 @@
 // switching timers SUSPENDS the current one and RESUMES the target — nothing is
 // lost. Stopping finalizes the active timer's session into history.
 
-                                                                                                               
+                                                                                                                                
 import { MAX_TIMERS } from "./types.js";
 import * as T from "./timer.js";
 
@@ -336,6 +336,33 @@ export class Device {
     const sessions = await this.store.listSessions();
     const timers = (await Promise.all(cards.map(c => this.store.listTimers(c.id)))).flat();
     return { sessions, cards, timers, now: this.now() };
+  }
+
+  // ── Portability: export / import the whole dataset ──────────────
+  // Used for backups and for moving between storage backends (local ↔ Supabase).
+
+  /** Snapshot the entire dataset as a plain JSON-able object. */
+  async exportAll()                           {
+    const cards = await this.store.listCards();
+    const timers = (await Promise.all(cards.map(c => this.store.listTimers(c.id)))).flat();
+    const sessions = await this.store.listSessions();
+    const slot = await this.store.getSlot();
+    return { version: 1, exportedAt: this.now(), cards, timers, sessions, slot };
+  }
+
+  /** Write an exported dataset into the current store. Merge (upsert) by id so it's
+   *  safe to import into an existing store; existing rows with the same id are
+   *  overwritten. Returns counts of what was written. */
+  async importAll(data                 )                                                               {
+    for (const c of data.cards ?? []) {
+      // upsert: create if absent, else update.
+      if (await this.store.getCard(c.id)) await this.store.updateCard(c);
+      else await this.store.createCard(c);
+    }
+    for (const t of data.timers ?? []) await this.store.putTimer(t);
+    for (const s of data.sessions ?? []) await this.store.putSession(s);
+    if (data.slot) await this.store.setSlot(data.slot);
+    return { cards: data.cards?.length ?? 0, timers: data.timers?.length ?? 0, sessions: data.sessions?.length ?? 0 };
   }
 
   // ── internals ──────────────────────────────────────────────────

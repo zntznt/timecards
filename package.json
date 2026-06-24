@@ -9,7 +9,7 @@
   },
   "scripts": {
     "cli": "node cli/timecards.ts",
-    "test": "node core/core.test.ts && node core/stats.test.ts",
+    "test": "node core/core.test.ts && node core/stats.test.ts && node core/supabase-store.test.ts",
     "build:web": "node web/build.ts"
   },
   "engines": {

@@ -134,6 +134,16 @@ export interface SlotView {
   dayCount: DayCount | null;
 }
 
+/** A full dataset snapshot for backup or moving between storage backends. */
+export interface TimecardsExport {
+  version: 1;
+  exportedAt: number;
+  cards: Card[];
+  timers: Timer[];
+  sessions: Session[];
+  slot: Slot;
+}
+
 /** Storage contract. SQLite (CLI/Pi) and IndexedDB (web) each implement this.
  *  Deliberately tiny: the core holds all logic, adapters only persist. */
 export interface Storage {

@@ -31,11 +31,27 @@ earns its place when you need one of:
 Until one of those is real, **don't build it** (YAGNI). The interface guarantees it
 stays a small, scoped job whenever you do.
 
-## Plan: a "bring your own Supabase" adapter (when sync is wanted)
+## BUILT: the "bring your own Supabase" adapter
 
-Supabase is hosted Postgres + a JS client. Best fit because **the user supplies
-their own project URL + anon key**, so no one operates or pays for a shared server,
-and each user owns their data. It becomes a *third* opt-in backend, not a requirement.
+Cloud sync is now implemented in **`core/supabase-store.ts`** (`SupabaseStore`), with
+schema + setup in **`integrations/supabase/`**. It's opt-in: CLI/Pi use it when
+`TIMECARDS_SUPABASE_URL`/`_KEY` env vars are set, the web app when you paste creds in
+⚙ settings (stored in localStorage). Local stays the default. `timecards export` /
+`import` move data between backends. The notes below describe how it's built.
+
+Supabase is hosted Postgres + a JS client. The user supplies **their own project URL
++ anon key**, so no one operates or pays for a shared server, and each user owns their
+data. It's a *third* opt-in backend, not a requirement.
+
+Key implementation facts (verified against supabase-js v2):
+- Calls never reject — they resolve to `{ data, error }`. `SupabaseStore.check()`
+  throws on `error` so failures surface loudly.
+- `.maybeSingle()` returns `data:null` for no-row (used for getCard/getTimer/getSlot);
+  `.upsert()` is insert-or-replace by PK (putTimer/putSession/setSlot).
+- Same query code runs in Node and the browser. The ONLY difference is the
+  `createClient` import: Node uses the `@supabase/supabase-js` npm package (via
+  `makeSupabaseStoreNode`); the browser imports from `https://esm.sh/@supabase/supabase-js@2`
+  (no bundler). The build's `.ts→.js` rewrite leaves that CDN URL untouched.
 
 ### 1. Tables (mirror the SQLite schema exactly)
 

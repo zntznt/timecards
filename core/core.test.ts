@@ -258,4 +258,34 @@ await test("pure: bigButtonAction maps states correctly", async () => {
   assert.equal(T.bigButtonAction("finished"), "noop");
 });
 
+await test("export → import round-trips the whole dataset into a fresh store", async () => {
+  const { dev, store, tick } = harness();
+  const card = await dev.createCard("Hobby");
+  const t2 = await dev.addTimer(card.id, { name: "Pomodoro", mode: "down", targetMs: 25 * 60000 });
+  await dev.slot(card.id);
+  await dev.press(); tick(5_000); await dev.stop();      // a history session
+  await dev.switchTimer(t2.id); await dev.press();       // a live (suspended-able) session
+  const dump = await dev.exportAll();
+  assert.equal(dump.cards.length, 1);
+  assert.equal(dump.timers.length, 2);
+  assert.equal(dump.sessions.length, 1);
+
+  // Import into a brand-new device/store and verify it matches.
+  const fresh = new Device(new (store.constructor as any)(), () => 2_000_000, () => "x");
+  const counts = await fresh.importAll(dump);
+  assert.deepEqual(counts, { cards: 1, timers: 2, sessions: 1 });
+  assert.equal((await fresh.listCards()).length, 1);
+  assert.equal((await fresh.listTimers(card.id)).length, 2);
+  assert.equal(await fresh.totalMs(card.id), 5_000);     // history preserved
+  assert.equal((await fresh.view()).card?.id, "hobby");  // slot preserved
+});
+
+await test("import merges (upsert) into an existing store without dupes", async () => {
+  const { dev } = harness();
+  const card = await dev.createCard("A");
+  const dump = await dev.exportAll();
+  await dev.importAll(dump);                               // re-import same data
+  assert.equal((await dev.listCards()).length, 1);         // no duplicate card
+});
+
 console.log(`\n${passed} core checks passed.`);

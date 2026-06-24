@@ -17,6 +17,7 @@
 //
 // Add --json to any command to get a machine-readable object on stdout.
 
+import { readFileSync, writeFileSync } from "node:fs";
 import { Device, slugify } from "../core/device.ts";
 import { SqliteStore } from "../core/sqlite-store.ts";
 import { fmtDuration } from "../core/format.ts";
@@ -134,8 +135,26 @@ async function resolveCardId(dev: Device, q: string): Promise<string> {
 }
 
 // ── main ────────────────────────────────────────────────────────
-const store = new SqliteStore();
-const dev = new Device(store);
+// Backend selection: if TIMECARDS_SUPABASE_URL + _KEY are set, sync to Supabase;
+// otherwise use the local SQLite file. Opt-in — local stays the default.
+const SB_URL = process.env.TIMECARDS_SUPABASE_URL;
+const SB_KEY = process.env.TIMECARDS_SUPABASE_KEY;
+let store: { close?: () => void };
+let dev: Device;
+if (SB_URL && SB_KEY) {
+  try {
+    const { makeSupabaseStoreNode } = await import("../core/supabase-store.ts");
+    const sb = await makeSupabaseStoreNode(SB_URL, SB_KEY);
+    store = sb as any;
+    dev = new Device(sb);
+  } catch (e) {
+    die(e instanceof Error ? e.message : String(e));
+  }
+} else {
+  const sqlite = new SqliteStore();
+  store = sqlite;
+  dev = new Device(sqlite);
+}
 
 try {
   switch (cmd) {
@@ -336,6 +355,22 @@ try {
       out(`registered tag ${uid} -> ${card.name}`, card);
       break;
     }
+    case "export": {
+      const dump = await dev.exportAll();
+      const text = JSON.stringify(dump, null, 2);
+      const file = pullOpt("--out") ?? argv[0];
+      if (file) { writeFileSync(file, text); console.error(`exported to ${file}`); }
+      else console.log(text);                 // to stdout for piping
+      break;
+    }
+    case "import": {
+      const file = argv[0];
+      if (!file) die(`usage: timecards import <file.json>`);
+      const data = JSON.parse(readFileSync(file, "utf8"));
+      const counts = await dev.importAll(data);
+      out(`imported ${counts.cards} cards, ${counts.timers} timers, ${counts.sessions} sessions`, counts);
+      break;
+    }
     case "rm": case "delete": {
       const id = await resolveCardId(dev, need("rm <id>"));
       await dev.deleteCard(id);
@@ -349,7 +384,7 @@ try {
       die(`unknown command "${cmd}" — try: timecards help`);
   }
 } finally {
-  store.close();
+  store.close?.();   // SQLite needs closing; Supabase store has nothing to close
 }
 
 function need(usage: string): string {
@@ -389,6 +424,12 @@ DEVICE
   report [<id>]                                  total tracked time
   stats [<id>]                                   totals, streaks, by-day, recent
 
-  <dur> = minutes (25) or H:M:S (1:30:00). Switching timers suspends one and
-  resumes another where it left off. Add --json for machine-readable output.`);
+DATA
+  export [--out <file>]                          dump all data as JSON (backup / migrate)
+  import <file.json>                             load data from an export (merge by id)
+
+  <dur> = minutes (25) or H:M:S (1:30:00). Switching timers suspends one and resumes
+  another where it left off. Add --json for machine-readable output.
+  Cloud sync: set TIMECARDS_SUPABASE_URL/_KEY to sync via your own Supabase project
+  (see integrations/supabase/README.md).`);
 }

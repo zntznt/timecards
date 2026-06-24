@@ -4,13 +4,31 @@
 
 import { Device } from "../core/device.ts";
 import { IdbStore } from "./idb-store.ts";
+import { SupabaseStore } from "../core/supabase-store.ts";
 import { fmtDuration } from "../core/format.ts";
 import { bigButtonAction } from "../core/timer.ts";
 import { MAX_TIMERS } from "../core/types.ts";
 import * as Stats from "../core/stats.ts";
-import type { SlotView, Card, Timer, TimerMode, AlarmStyle, DeadlineKind } from "../core/types.ts";
+import type { Storage, SlotView, Card, Timer, TimerMode, AlarmStyle, DeadlineKind } from "../core/types.ts";
 
-const dev = new Device(new IdbStore());
+// Backend selection: if the user saved Supabase creds (settings ⚙), sync there;
+// otherwise keep data in this browser's IndexedDB. Opt-in — IDB is the default.
+async function makeStore(): Promise<Storage> {
+  const url = localStorage.getItem("tc_sb_url");
+  const key = localStorage.getItem("tc_sb_key");
+  if (url && key) {
+    try {
+      // Browser imports supabase-js from the esm.sh CDN (no bundler in this project).
+      const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
+      return new SupabaseStore(createClient(url, key, { auth: { persistSession: false } }));
+    } catch (e) {
+      console.error("Supabase sync failed; falling back to local. ", e);
+    }
+  }
+  return new IdbStore();
+}
+
+const dev = new Device(await makeStore());
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const elDevice = $("device");
@@ -31,6 +49,7 @@ const elList = $("card-list");
 const elAdd = $<HTMLButtonElement>("add-card");
 const elCardEditor = $<HTMLDialogElement>("card-editor");
 const elTimerEditor = $<HTMLDialogElement>("timer-editor");
+const elSettings = $<HTMLDialogElement>("settings-editor");
 const elTabDevice = $<HTMLButtonElement>("tab-device");
 const elTabStats = $<HTMLButtonElement>("tab-stats");
 const elViewDevice = $("view-device");
@@ -294,6 +313,29 @@ $<HTMLFormElement>("timer-form").onsubmit = async (e) => {
   }
   elTimerEditor.close();
   await renderAll();
+};
+
+// ── settings: Supabase sync ─────────────────────────────────────
+$("settings-btn").onclick = () => {
+  $<HTMLInputElement>("sb-url").value = localStorage.getItem("tc_sb_url") ?? "";
+  $<HTMLInputElement>("sb-key").value = localStorage.getItem("tc_sb_key") ?? "";
+  $("sb-status").textContent = localStorage.getItem("tc_sb_url")
+    ? "Currently syncing to Supabase."
+    : "Currently local only (this browser).";
+  elSettings.showModal();
+};
+$("sb-clear").onclick = () => {
+  localStorage.removeItem("tc_sb_url");
+  localStorage.removeItem("tc_sb_key");
+  location.reload();   // re-init with IndexedDB
+};
+$<HTMLFormElement>("settings-form").onsubmit = (e) => {
+  e.preventDefault();
+  const url = $<HTMLInputElement>("sb-url").value.trim();
+  const key = $<HTMLInputElement>("sb-key").value.trim();
+  if (url && key) { localStorage.setItem("tc_sb_url", url); localStorage.setItem("tc_sb_key", key); }
+  else { localStorage.removeItem("tc_sb_url"); localStorage.removeItem("tc_sb_key"); }
+  location.reload();   // re-init with the chosen backend
 };
 
 // ── parsers (mirror the CLI) ────────────────────────────────────

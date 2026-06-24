@@ -109,12 +109,28 @@ async function resolveTimer(dev: Device, cardId: string, q: string): Promise<Tim
 }
 
 /** Parse a "HH:MM", "MM", or plain minutes string into ms. "25"→25min, "1:30:00"→1h30m. */
+// Accept three UNAMBIGUOUS forms (no bare "1:30" — is that 90s or 90m?):
+//   plain minutes:  "25"
+//   H:M:S triple:   "1:30:00"
+//   unit-suffixed:  "90m", "1h30m", "45s", "1h", "2h15m30s"
+// Each unit is validated; minutes/seconds must be 0–59 in the H:M:S / suffix forms.
 function parseDuration(s: string): number {
-  const parts = s.split(":").map(Number);
-  if (parts.some(isNaN)) die(`bad duration "${s}" — use minutes (25) or H:M:S (1:30:00)`);
-  if (parts.length === 1) return Math.round(parts[0] * 60_000);       // minutes
-  if (parts.length === 2) return (parts[0] * 60 + parts[1]) * 60_000; // M:S? no — H:M. Treat as H:M
-  return (parts[0] * 3600 + parts[1] * 60 + parts[2]) * 1000;          // H:M:S
+  const t = s.trim().toLowerCase();
+  // unit-suffixed
+  const unit = /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/.exec(t);
+  if (unit && (unit[1] || unit[2] || unit[3])) {
+    const h = +(unit[1] ?? 0), m = +(unit[2] ?? 0), sec = +(unit[3] ?? 0);
+    if (m > 59 || sec > 59) die(`bad duration "${s}" — minutes/seconds must be 0–59`);
+    return ((h * 60 + m) * 60 + sec) * 1000;
+  }
+  const parts = t.split(":");
+  if (parts.length === 1 && /^\d+$/.test(parts[0])) return +parts[0] * 60_000;     // minutes
+  if (parts.length === 3 && parts.every(p => /^\d+$/.test(p))) {
+    const [h, m, sec] = parts.map(Number);
+    if (m > 59 || sec > 59) die(`bad duration "${s}" — minutes/seconds must be 0–59`);
+    return ((h * 60 + m) * 60 + sec) * 1000;
+  }
+  die(`bad duration "${s}" — use minutes (25), H:M:S (1:30:00), or units (1h30m, 90s)`);
 }
 
 /** Parse a date "YYYY-MM-DD" to epoch ms (local midnight). */
@@ -428,7 +444,7 @@ DATA
   export [--out <file>]                          dump all data as JSON (backup / migrate)
   import <file.json>                             load data from an export (merge by id)
 
-  <dur> = minutes (25) or H:M:S (1:30:00). Switching timers suspends one and resumes
+  <dur> = minutes (25), H:M:S (1:30:00), or units (1h30m, 90s). Switching timers suspends one and resumes
   another where it left off. Add --json for machine-readable output.
   Cloud sync: set TIMECARDS_SUPABASE_URL/_KEY to sync via your own Supabase project
   (see integrations/supabase/README.md).`);

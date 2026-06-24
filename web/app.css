@@ -249,5 +249,21 @@ body {
 }
 .editor input[type=color] { margin-top: 5px; width: 48px; height: 34px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); cursor: pointer; }
 .editor fieldset { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 14px; }
+
+/* Bounded H:M:S countdown entry — discrete units, no free-text ambiguity. */
+.dur-fields { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.dur-fields .dur-label { font-size: 13px; color: var(--muted); margin-right: 4px; }
+.dur-input { display: inline-flex; align-items: baseline; gap: 3px; }
+.dur-input input {
+  width: 46px; text-align: center; margin-top: 0;
+  background: var(--bg); border: 1px solid var(--line); color: var(--ink);
+  border-radius: 8px; padding: 8px 6px; font-size: 15px; font-variant-numeric: tabular-nums;
+}
+.dur-input label { font-size: 12px; color: var(--muted); }
+.dur-fields.disabled { opacity: 0.4; pointer-events: none; }
+/* hide the spinner arrows for a cleaner look; arrows still work via keyboard */
+.dur-input input::-webkit-outer-spin-button,
+.dur-input input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.dur-input input { -moz-appearance: textfield; appearance: textfield; }
 .editor legend { font-size: 12px; color: var(--muted); padding: 0 6px; }
 .editor-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px; }

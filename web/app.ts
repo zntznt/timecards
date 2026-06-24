@@ -284,24 +284,48 @@ elAddTimer.onclick = async () => {
   if (cardId) openTimerEditor(cardId, null);
 };
 
-/** Enable/grey-out the Length field to match the selected mode. */
-function syncTimerModeUI() {
-  const mode = (elTimerEditor.querySelector("input[name=tmode]:checked") as HTMLInputElement)?.value;
-  const durLabel = $<HTMLInputElement>("t-duration").closest("label") as HTMLElement;
-  durLabel.style.opacity = mode === "down" ? "1" : "0.4";
+// Bounded H:M:S entry — discrete units like the physical device, no free text.
+const elH = $<HTMLInputElement>("t-h"), elM = $<HTMLInputElement>("t-m"), elS = $<HTMLInputElement>("t-s");
+const elDurFields = $("dur-fields");
+
+/** Read + clamp the H:M:S inputs to ms. Empty fields count as 0. */
+function readDurationMs(): number {
+  const clamp = (el: HTMLInputElement, max: number) => {
+    let n = Math.floor(Number(el.value));
+    if (!Number.isFinite(n) || n < 0) n = 0;
+    if (n > max) { n = max; el.value = String(max); }  // visibly enforce the ceiling
+    return n;
+  };
+  const h = clamp(elH, 23), m = clamp(elM, 59), s = clamp(elS, 59);
+  return ((h * 60 + m) * 60 + s) * 1000;
 }
 
-// Picking a mode radio updates the Length field's look.
+/** Write ms back into the H:M:S inputs. */
+function writeDurationMs(ms: number | null) {
+  const total = Math.floor((ms ?? 0) / 1000);
+  elH.value = ms ? String(Math.floor(total / 3600)) : "";
+  elM.value = ms ? String(Math.floor((total % 3600) / 60)) : "";
+  elS.value = ms ? String(total % 60) : "";
+}
+
+/** Grey out the H:M:S fields unless Countdown is selected. */
+function syncTimerModeUI() {
+  const down = (elTimerEditor.querySelector("input[name=tmode]:checked") as HTMLInputElement)?.value === "down";
+  elDurFields.classList.toggle("disabled", !down);
+}
+
+// Picking a mode radio updates the fields' look.
 elTimerEditor.querySelectorAll<HTMLInputElement>("input[name=tmode]").forEach(r => {
   r.addEventListener("change", syncTimerModeUI);
 });
-// Typing a duration clearly means "countdown" — auto-select it so intent isn't lost.
-$<HTMLInputElement>("t-duration").addEventListener("input", () => {
-  if ($<HTMLInputElement>("t-duration").value.trim()) {
+// Editing any H:M:S field clearly means "countdown" — auto-select it, and clamp live.
+for (const el of [elH, elM, elS]) {
+  el.addEventListener("input", () => {
     (elTimerEditor.querySelector("input[name=tmode][value=down]") as HTMLInputElement).checked = true;
     syncTimerModeUI();
-  }
-});
+  });
+  el.addEventListener("blur", () => readDurationMs());  // clamp to bounds on leaving a field
+}
 
 function openTimerEditor(cardId: string, timer: Timer | null) {
   timerEditorCardId = cardId;
@@ -310,7 +334,7 @@ function openTimerEditor(cardId: string, timer: Timer | null) {
   $<HTMLInputElement>("t-name").value = timer?.name ?? "";
   const mode = timer?.mode ?? "up";
   (elTimerEditor.querySelector(`input[name=tmode][value=${mode}]`) as HTMLInputElement).checked = true;
-  $<HTMLInputElement>("t-duration").value = timer?.targetMs ? fmtDuration(timer.targetMs) : "";
+  writeDurationMs(timer?.targetMs ?? null);
   $<HTMLSelectElement>("t-alarm").value = timer?.alarmStyle ?? "chime";
   syncTimerModeUI();
   elTimerEditor.showModal();
@@ -319,15 +343,14 @@ $("timer-cancel").onclick = () => elTimerEditor.close();
 $<HTMLFormElement>("timer-form").onsubmit = async (e) => {
   e.preventDefault();
   const name = $<HTMLInputElement>("t-name").value.trim();
-  const durStr = $<HTMLInputElement>("t-duration").value.trim();
-  const targetMs = durStr ? parseDuration(durStr) : null;
-  // Intent: a duration that parses to a real value IS a countdown, whatever the
-  // radio says — so a typed length can never be silently discarded as a stopwatch.
+  const targetMs = readDurationMs();
+  // Intent: a non-zero H:M:S IS a countdown, whatever the radio says — a set length
+  // can never be silently discarded as a stopwatch.
   const radioMode = (elTimerEditor.querySelector("input[name=tmode]:checked") as HTMLInputElement).value as TimerMode;
-  const mode: TimerMode = targetMs && targetMs > 0 ? "down" : radioMode === "down" ? "down" : "up";
+  const mode: TimerMode = targetMs > 0 ? "down" : radioMode === "down" ? "down" : "up";
   const finalTarget = mode === "down" ? targetMs : null;
   const alarmStyle = $<HTMLSelectElement>("t-alarm").value as AlarmStyle;
-  if (mode === "down" && !finalTarget) { alert("Enter a countdown length (e.g. 25 or 1:30:00)."); return; }
+  if (mode === "down" && !finalTarget) { alert("Set a countdown length greater than zero (h / m / s)."); return; }
   if (editingTimerId) {
     await dev.configureTimer(editingTimerId, { name: name || undefined, mode, targetMs: finalTarget, alarmStyle });
   } else if (timerEditorCardId) {
@@ -363,15 +386,6 @@ $<HTMLFormElement>("settings-form").onsubmit = (e) => {
   location.reload();   // re-init with the chosen backend
 };
 
-// ── parsers (mirror the CLI) ────────────────────────────────────
-function parseDuration(s: string): number | null {
-  if (!s.trim()) return null;
-  const parts = s.split(":").map(Number);
-  if (parts.some(isNaN)) return null;
-  if (parts.length === 1) return Math.round(parts[0] * 60_000);
-  if (parts.length === 2) return (parts[0] * 60 + parts[1]) * 60_000;
-  return (parts[0] * 3600 + parts[1] * 60 + parts[2]) * 1000;
-}
 function isoDate(ms: number): string {
   const d = new Date(ms);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;

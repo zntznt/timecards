@@ -116,7 +116,12 @@
         <legend>Type</legend>
         <label class="radio"><input type="radio" name="tmode" value="up" checked /> Stopwatch (count up)</label>
         <label class="radio"><input type="radio" name="tmode" value="down" /> Countdown</label>
-        <label class="indent">Length <input id="t-duration" type="text" placeholder="25 (min) or 1:30:00" /></label>
+        <div id="dur-fields" class="dur-fields indent">
+          <span class="dur-label">Length</span>
+          <span class="dur-input"><input id="t-h" type="number" min="0" max="23" step="1" inputmode="numeric" placeholder="0" /><label for="t-h">h</label></span>
+          <span class="dur-input"><input id="t-m" type="number" min="0" max="59" step="1" inputmode="numeric" placeholder="25" /><label for="t-m">m</label></span>
+          <span class="dur-input"><input id="t-s" type="number" min="0" max="59" step="1" inputmode="numeric" placeholder="0" /><label for="t-s">s</label></span>
+        </div>
       </fieldset>
       <label>Alarm at zero
         <select id="t-alarm">

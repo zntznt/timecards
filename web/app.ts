@@ -284,6 +284,25 @@ elAddTimer.onclick = async () => {
   if (cardId) openTimerEditor(cardId, null);
 };
 
+/** Enable/grey-out the Length field to match the selected mode. */
+function syncTimerModeUI() {
+  const mode = (elTimerEditor.querySelector("input[name=tmode]:checked") as HTMLInputElement)?.value;
+  const durLabel = $<HTMLInputElement>("t-duration").closest("label") as HTMLElement;
+  durLabel.style.opacity = mode === "down" ? "1" : "0.4";
+}
+
+// Picking a mode radio updates the Length field's look.
+elTimerEditor.querySelectorAll<HTMLInputElement>("input[name=tmode]").forEach(r => {
+  r.addEventListener("change", syncTimerModeUI);
+});
+// Typing a duration clearly means "countdown" — auto-select it so intent isn't lost.
+$<HTMLInputElement>("t-duration").addEventListener("input", () => {
+  if ($<HTMLInputElement>("t-duration").value.trim()) {
+    (elTimerEditor.querySelector("input[name=tmode][value=down]") as HTMLInputElement).checked = true;
+    syncTimerModeUI();
+  }
+});
+
 function openTimerEditor(cardId: string, timer: Timer | null) {
   timerEditorCardId = cardId;
   editingTimerId = timer?.id ?? null;
@@ -293,21 +312,27 @@ function openTimerEditor(cardId: string, timer: Timer | null) {
   (elTimerEditor.querySelector(`input[name=tmode][value=${mode}]`) as HTMLInputElement).checked = true;
   $<HTMLInputElement>("t-duration").value = timer?.targetMs ? fmtDuration(timer.targetMs) : "";
   $<HTMLSelectElement>("t-alarm").value = timer?.alarmStyle ?? "chime";
+  syncTimerModeUI();
   elTimerEditor.showModal();
 }
 $("timer-cancel").onclick = () => elTimerEditor.close();
 $<HTMLFormElement>("timer-form").onsubmit = async (e) => {
   e.preventDefault();
   const name = $<HTMLInputElement>("t-name").value.trim();
-  const mode = (elTimerEditor.querySelector("input[name=tmode]:checked") as HTMLInputElement).value as TimerMode;
   const durStr = $<HTMLInputElement>("t-duration").value.trim();
-  const targetMs = mode === "down" && durStr ? parseDuration(durStr) : null;
+  const targetMs = durStr ? parseDuration(durStr) : null;
+  // Intent: a duration that parses to a real value IS a countdown, whatever the
+  // radio says — so a typed length can never be silently discarded as a stopwatch.
+  const radioMode = (elTimerEditor.querySelector("input[name=tmode]:checked") as HTMLInputElement).value as TimerMode;
+  const mode: TimerMode = targetMs && targetMs > 0 ? "down" : radioMode === "down" ? "down" : "up";
+  const finalTarget = mode === "down" ? targetMs : null;
   const alarmStyle = $<HTMLSelectElement>("t-alarm").value as AlarmStyle;
+  if (mode === "down" && !finalTarget) { alert("Enter a countdown length (e.g. 25 or 1:30:00)."); return; }
   if (editingTimerId) {
-    await dev.configureTimer(editingTimerId, { name: name || undefined, mode, targetMs, alarmStyle });
+    await dev.configureTimer(editingTimerId, { name: name || undefined, mode, targetMs: finalTarget, alarmStyle });
   } else if (timerEditorCardId) {
     try {
-      const t = await dev.addTimer(timerEditorCardId, { name, mode, targetMs, alarmStyle });
+      const t = await dev.addTimer(timerEditorCardId, { name, mode, targetMs: finalTarget, alarmStyle });
       await dev.switchTimer(t.id); // make the new timer active
     } catch (err) { alert(String(err instanceof Error ? err.message : err)); }
   }

@@ -494,10 +494,11 @@ button { font-family: inherit; }
 
 /* ═══════════════ THE PAPERS (report + settings print from the one mouth) ═══════ */
 .appbar { position: relative; z-index: 5; }   /* papers drape OVER the scene below */
-.pr-exit { z-index: 2; }                      /* ...but feed out from BEHIND the exit lip */
 .paper {
-  position: absolute; z-index: 1;
-  top: calc(100% - 12px);         /* anchored at the mouth on the header's bottom edge */
+  /* like the mock: the paper's top edge sits AT the mouth and the sheet passes IN
+     FRONT of the tear bar (its own feed shadow says "from inside the slot") */
+  position: absolute; z-index: 4;
+  top: calc(100% - 12px);         /* the mouth's Y on the header's bottom edge */
   left: 50%; margin-left: calc(var(--paper-w) / -2);
   width: var(--paper-w);          /* a hair narrower than the mouth it feeds from */
   padding: 30px 18px 16px;

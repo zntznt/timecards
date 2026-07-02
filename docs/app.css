@@ -780,69 +780,111 @@ button { font-family: inherit; }
 .p-field input:focus { outline: none; background: rgba(43,42,37,.05); }
 .p-field input::placeholder { color: #b3afa2; }
 
-/* ═══════════════ DIALOGS: cream cardstock forms ═══════════════ */
-.editor { border: none; border-radius: 14px; padding: 0; background: transparent; max-width: min(420px, calc(100vw - 32px)); }
-.editor::backdrop { background: rgba(30,26,16,.55); backdrop-filter: blur(2px); }
-.editor form {
-  background: linear-gradient(180deg, var(--shell-hi), var(--shell) 20%, var(--shell) 85%, var(--shell-lo));
-  border: 1px solid var(--shell-edge); border-radius: 14px;
-  padding: 18px 18px 14px;
-  box-shadow: 0 2px 0 var(--shell-hi) inset, 0 24px 40px -12px rgba(60,52,30,.6);
-  display: flex; flex-direction: column; gap: 12px;
+/* ═══════════ THE INDEX CARDS (create/edit = fill in a card, in pencil) ═══════════
+   A ruled index card slides up from the desk to the middle, slightly tilted; the
+   form is pencil handwriting on its rules. One more real object on the desk. */
+.editor { border: none; padding: 0; background: transparent; overflow: visible;
+  /* explicit modal centering — the global margin reset kills the UA's dialog margin:auto */
+  position: fixed; inset: 0; margin: auto; width: fit-content; height: fit-content;
+  max-width: none; max-height: none; }
+.editor::backdrop { background: rgba(30,26,16,.45); backdrop-filter: blur(1.5px); }
+.index-card {
+  --graphite: #44464b;        /* pencil stroke */
+  --graphite-soft: #83868d;   /* light pencil */
+  --redpencil: #c94f3d;       /* the red pencil */
+  --rule: rgba(72,110,165,.30);
+  --tilt: -2.2deg;
+  position: relative;
+  width: min(420px, calc(100vw - 36px));
+  padding: 16px 24px 20px;
+  border-radius: 5px;
+  font-family: "Klee One", "Zen Kaku Gothic New", cursive;
+  color: var(--graphite);
+  background: linear-gradient(165deg, #fdfbf3, #f8f3e6 70%, #f1ead8);
+  box-shadow:
+    0 30px 60px -18px rgba(40,34,18,.65),
+    0 4px 10px rgba(0,0,0,.2),
+    inset 0 0 0 1px rgba(255,255,255,.5);
+  transform: rotate(var(--tilt));
 }
-.editor h3 { font-size: 13px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase;
-  color: var(--ink); border-bottom: 1px solid var(--shell-edge); padding-bottom: 8px; }
-.editor label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 700;
-  letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); }
-.editor .opt { font-weight: 500; letter-spacing: .04em; text-transform: none; }
-.editor input[type=text], .editor input[type=url], .editor input[type=date],
-.editor input[type=number], .editor select {
-  font-family: "Share Tech Mono", monospace; font-size: 15px; color: var(--lcd-dark);
-  background: linear-gradient(180deg, var(--lcd-bg), var(--lcd-bg-lo));
-  border: 1px solid #3a3a30; border-radius: 5px; padding: 7px 9px;
-  box-shadow: inset 0 2px 4px rgba(40,50,35,.35);
+.index-card.tilt-r { --tilt: 1.8deg; }
+/* the red double head-rule */
+.index-card::before { content: ""; position: absolute; left: 0; right: 0; top: 46px;
+  border-top: 2px solid rgba(201,79,61,.5); box-shadow: 0 3px 0 -1px rgba(201,79,61,.3);
+  pointer-events: none; }
+/* faint blue rules over the card's writing area */
+.index-card::after { content: ""; position: absolute; left: 0; right: 0; top: 56px; bottom: 58px;
+  background: repeating-linear-gradient(0deg, transparent 0 27px, rgba(72,110,165,.10) 27px 28px);
+  pointer-events: none; }
+/* pulled up from the desk below, settles at its tilt */
+dialog[open] .index-card { animation: ic-up .5s cubic-bezier(.2,.85,.3,1); }
+@keyframes ic-up {
+  0%   { transform: translateY(110vh) rotate(.5deg); }
+  80%  { transform: translateY(-10px) rotate(var(--tilt)); }
+  100% { transform: translateY(0) rotate(var(--tilt)); }
 }
-.editor input:focus, .editor select:focus { outline: 2px solid var(--vermilion); outline-offset: 1px; }
-.editor input[type=color] { width: 54px; height: 32px; padding: 2px; cursor: pointer;
-  background: linear-gradient(180deg, var(--shell-hi), #d3cab0);
-  border: 1px solid var(--shell-edge); border-radius: 5px; }
-.editor fieldset { border: 1px solid var(--shell-edge); border-radius: 8px; padding: 10px 12px;
-  display: flex; flex-direction: column; gap: 7px; }
-.editor legend { font-size: 10px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
-  color: var(--ink-soft); padding: 0 5px; }
-.editor .radio { flex-direction: row; align-items: center; gap: 7px; font-weight: 600;
-  letter-spacing: .06em; cursor: pointer; }
-.editor .radio input { accent-color: var(--vermilion); width: 15px; height: 15px; }
-.editor .indent { margin-left: 2px; }
-.dur-fields { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.dur-fields.disabled { opacity: .45; }
-.dur-label { font-size: 10px; font-weight: 700; letter-spacing: .14em; color: var(--ink-soft); }
-.dur-input { display: flex; align-items: baseline; gap: 3px; }
-.dur-input input { width: 56px; text-align: right; }
-.dur-input label { font-size: 10px; color: var(--ink-soft); font-weight: 700; }
-.editor-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 2px; }
-.editor .ghost {
-  font-weight: 700; font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
-  color: var(--ink-soft); cursor: pointer;
-  background: transparent; border: 1px dashed var(--shell-edge); border-radius: 7px; padding: 8px 12px;
-}
-.editor .ghost:hover { color: var(--ink); }
-.editor .add {
-  font-weight: 700; font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
-  color: #3a2a12; cursor: pointer;
-  background: linear-gradient(180deg, #f7be5a 0, var(--pr-amber) 55%, #d8902a 100%);
-  border: none; border-radius: 7px; padding: 8px 16px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.6), inset 0 -2px 3px rgba(120,70,10,.45),
-              0 2px 3px rgba(0,0,0,.3);
-}
-.editor .add:active { box-shadow: inset 0 3px 5px rgba(80,45,5,.55); }
+.index-card.away { animation: ic-down .3s cubic-bezier(.5,0,.8,.4) forwards; }
+@keyframes ic-down { to { transform: translateY(115vh) rotate(calc(var(--tilt) * 2)); } }
 
-/* wider desks: cap the readout, give the scene air */
+.ic-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  padding-bottom: 12px; }
+.ic-head h3 { font-size: 22px; font-weight: 600; letter-spacing: .02em; line-height: 1.1; }
+.ic-jp { font-size: 12px; color: var(--redpencil); opacity: .85; }
+/* a field = a label written small, the value written ON a rule */
+.ic-field { display: flex; flex-direction: column; gap: 1px; font-size: 12px;
+  color: var(--graphite-soft); letter-spacing: .05em; margin-top: 10px; min-width: 0; }
+.ic-field input, .ic-field select {
+  font-family: inherit; font-size: 19px; color: var(--graphite);
+  background: transparent; border: none; border-bottom: 1.5px solid var(--rule);
+  border-radius: 0; padding: 0 2px 2px; outline: none; min-width: 0;
+}
+.ic-field input:focus, .ic-field select:focus { border-bottom-color: var(--redpencil); }
+.ic-field input::placeholder { color: rgba(131,134,141,.45); }
+.ic-field select { appearance: none; -webkit-appearance: none; cursor: pointer; }
+.ic-row { display: flex; gap: 20px; }
+.ic-row .ic-field { flex: 1 1 0; }
+.ic-color input[type=color] { width: 52px; height: 30px; padding: 0; cursor: pointer;
+  background: transparent; border: none; border-bottom: 1.5px solid var(--rule); }
+/* pencil-drawn radios: a wobbly circle, scribbled in when checked */
+.ic-radios { display: flex; gap: 20px; margin-top: 14px; flex-wrap: wrap; }
+.ic-radio { display: flex; align-items: center; gap: 8px; font-size: 15px; cursor: pointer;
+  color: var(--graphite); }
+.ic-radio input { appearance: none; -webkit-appearance: none; width: 17px; height: 17px;
+  margin: 0; cursor: pointer; border: 1.6px solid var(--graphite);
+  border-radius: 49% 51% 48% 52% / 52% 48% 52% 48%; }
+.ic-radio input:checked { background: radial-gradient(circle at 45% 42%, var(--graphite) 0 42%, transparent 52%); }
+.ic-radio input:focus-visible { outline: 2px solid var(--redpencil); outline-offset: 2px; }
+/* h:m:s written in little ruled slots */
+.ic-dur { display: flex; align-items: baseline; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+.ic-dur.disabled { opacity: .4; }
+.ic-dur-label { font-size: 12px; color: var(--graphite-soft); letter-spacing: .05em; }
+.ic-dur-in { display: flex; align-items: baseline; gap: 4px; }
+.ic-dur-in input { width: 46px; text-align: center; font-family: inherit; font-size: 19px;
+  color: var(--graphite); background: transparent; border: none;
+  border-bottom: 1.5px solid var(--rule); border-radius: 0; outline: none; padding: 0 0 2px; }
+.ic-dur-in input:focus { border-bottom-color: var(--redpencil); }
+.ic-dur-in input::-webkit-outer-spin-button, .ic-dur-in input::-webkit-inner-spin-button {
+  -webkit-appearance: none; margin: 0; }
+.ic-dur-in input { -moz-appearance: textfield; appearance: textfield; }
+.ic-dur-in label { font-size: 12px; color: var(--graphite-soft); }
+/* hand-drawn button boxes; SAVE in red pencil */
+.ic-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px;
+  position: relative; z-index: 1; }
+.ic-btn { font-family: inherit; font-weight: 600; font-size: 15px; color: var(--graphite);
+  background: transparent; cursor: pointer; padding: 4px 16px;
+  border: 1.7px solid var(--graphite);
+  border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px; }
+.ic-btn:hover { background: rgba(68,70,75,.06); }
+.ic-btn:active { background: rgba(68,70,75,.12); }
+.ic-btn.red { color: var(--redpencil); border-color: var(--redpencil); }
+.ic-btn.red:hover { background: rgba(201,79,61,.07); }
+
 /* one reduced-motion block (mock review D16) */
 @media (prefers-reduced-motion: reduce) {
   .paper.spooling, .paper.cut, .pr-stub.feeding { animation: none; }
   .lcd.waking { animation: none; }
   .card-3d { transition: opacity 1ms; }   /* flip lands instantly, no 3D turn */
+  dialog[open] .index-card, .index-card.away { animation: none; }
   .card, .card.airborne { transition: none; }   /* gesture beats resolve via their timeout clocks */
   .foil-prism:hover .foil, .foil-gold:hover .foil, .foil-holo:hover .foil,
   .foil-emerald:hover .foil, .foil-violet:hover .foil { animation: none; }

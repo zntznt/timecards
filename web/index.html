@@ -11,7 +11,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <!-- Saira Condensed = silkscreen labels. Share Tech Mono = LCD digits.
        Zen Kaku Gothic = card titles + JP flavor. VT323 = the printer's dot-matrix. -->
-  <link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700&family=Share+Tech+Mono&family=Zen+Kaku+Gothic+New:wght@500;700;900&family=VT323&display=swap" rel="stylesheet" />
+  <!-- Klee One = the index cards' pencil handwriting (Japanese textbook hand). -->
+  <link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700&family=Share+Tech+Mono&family=Zen+Kaku+Gothic+New:wght@500;700;900&family=VT323&family=Klee+One:wght@400;600&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
@@ -164,52 +165,58 @@
     </div><!-- /view-device -->
   </main>
 
-  <!-- Card editor: name / category / color / deadline. -->
+  <!-- Card editor: an INDEX CARD pulled up from the desk, filled in with pencil. -->
   <dialog id="card-editor" class="editor">
-    <form method="dialog" id="card-form">
-      <h3 id="card-title">New card</h3>
-      <label>Name<input id="c-name" type="text" required maxlength="40" placeholder="Hobby" /></label>
-      <label>Category <span class="opt">(optional)</span><input id="c-category" type="text" maxlength="24" placeholder="hobby" /></label>
-      <label>Color<input id="c-color" type="color" value="#6f7457" /></label>
-      <fieldset>
-        <legend>Deadline / streak <span class="opt">(optional)</span></legend>
-        <label class="indent">Date <input id="c-deadline" type="date" /></label>
-        <label class="radio"><input type="radio" name="dkind" value="until" checked /> Days until (countdown)</label>
-        <label class="radio"><input type="radio" name="dkind" value="since" /> Days since (streak)</label>
-      </fieldset>
-      <div class="editor-actions">
-        <button type="button" id="card-cancel" class="ghost">cancel</button>
-        <button type="submit" class="add">save</button>
+    <form method="dialog" id="card-form" class="index-card tilt-l">
+      <div class="ic-head">
+        <h3 id="card-title">New card</h3>
+        <span class="ic-jp">カード ・ 記入</span>
+      </div>
+      <label class="ic-field">name ・ 名前<input id="c-name" type="text" required maxlength="40" placeholder="Hobby" /></label>
+      <label class="ic-field">category<input id="c-category" type="text" maxlength="24" placeholder="hobby" /></label>
+      <div class="ic-row">
+        <label class="ic-field ic-color">color ・ 色<input id="c-color" type="color" value="#6f7457" /></label>
+        <label class="ic-field"><span>deadline / streak</span><input id="c-deadline" type="date" /></label>
+      </div>
+      <div class="ic-radios">
+        <label class="ic-radio"><input type="radio" name="dkind" value="until" checked /> days until ・ 期限</label>
+        <label class="ic-radio"><input type="radio" name="dkind" value="since" /> days since ・ 連続</label>
+      </div>
+      <div class="ic-actions">
+        <button type="button" id="card-cancel" class="ic-btn">cancel</button>
+        <button type="submit" class="ic-btn red">save ・ 保存</button>
       </div>
     </form>
   </dialog>
 
-  <!-- Timer editor: name / mode / duration / alarm. -->
+  <!-- Timer editor: another index card from the same box, its own tilt. -->
   <dialog id="timer-editor" class="editor">
-    <form method="dialog" id="timer-form">
-      <h3 id="timer-title">New timer</h3>
-      <label>Name<input id="t-name" type="text" required maxlength="40" placeholder="Deep work" /></label>
-      <fieldset>
-        <legend>Type</legend>
-        <label class="radio"><input type="radio" name="tmode" value="up" checked /> Stopwatch (count up)</label>
-        <label class="radio"><input type="radio" name="tmode" value="down" /> Countdown</label>
-        <div id="dur-fields" class="dur-fields indent">
-          <span class="dur-label">Length</span>
-          <span class="dur-input"><input id="t-h" type="number" min="0" max="23" step="1" inputmode="numeric" placeholder="0" /><label for="t-h">h</label></span>
-          <span class="dur-input"><input id="t-m" type="number" min="0" max="59" step="1" inputmode="numeric" placeholder="25" /><label for="t-m">m</label></span>
-          <span class="dur-input"><input id="t-s" type="number" min="0" max="59" step="1" inputmode="numeric" placeholder="0" /><label for="t-s">s</label></span>
-        </div>
-      </fieldset>
-      <label>Alarm at zero
+    <form method="dialog" id="timer-form" class="index-card tilt-r">
+      <div class="ic-head">
+        <h3 id="timer-title">New timer</h3>
+        <span class="ic-jp">タイマー ・ 記入</span>
+      </div>
+      <label class="ic-field">name ・ 名前<input id="t-name" type="text" required maxlength="40" placeholder="Deep work" /></label>
+      <div class="ic-radios">
+        <label class="ic-radio"><input type="radio" name="tmode" value="up" checked /> stopwatch ▴</label>
+        <label class="ic-radio"><input type="radio" name="tmode" value="down" /> countdown ▾</label>
+      </div>
+      <div id="dur-fields" class="ic-dur">
+        <span class="ic-dur-label">length ・ 長さ</span>
+        <span class="ic-dur-in"><input id="t-h" type="number" min="0" max="23" step="1" inputmode="numeric" placeholder="0" /><label for="t-h">h</label></span>
+        <span class="ic-dur-in"><input id="t-m" type="number" min="0" max="59" step="1" inputmode="numeric" placeholder="25" /><label for="t-m">m</label></span>
+        <span class="ic-dur-in"><input id="t-s" type="number" min="0" max="59" step="1" inputmode="numeric" placeholder="0" /><label for="t-s">s</label></span>
+      </div>
+      <label class="ic-field">alarm at zero ・ アラーム
         <select id="t-alarm">
-          <option value="chime">chime</option>
+          <option value="chime">chime ・ チャイム</option>
           <option value="blip">short blip</option>
           <option value="silent">silent (visual only)</option>
         </select>
       </label>
-      <div class="editor-actions">
-        <button type="button" id="timer-cancel" class="ghost">cancel</button>
-        <button type="submit" class="add">save</button>
+      <div class="ic-actions">
+        <button type="button" id="timer-cancel" class="ic-btn">cancel</button>
+        <button type="submit" class="ic-btn red">save ・ 保存</button>
       </div>
     </form>
   </dialog>

@@ -145,6 +145,25 @@ function sndFlip() {
   n.connect(bp).connect(g).connect(lp).connect(c.destination); n.start(t); n.stop(t + dur + 0.02);
   setTimeout(() => { noiseClick(0.012, 0.13); tone(3100 * j, 0.015, "sine", 0.08); }, 300);
 }
+// SHEET — an index card sliding across the desk: a soft band-swept paper hiss,
+// with a settle tap when it arrives (dir 1 = pulled up, -1 = tossed away).
+function sndSheet(dir: 1 | -1 = 1) {
+  if (!audioCtx) audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+  const c = audioCtx, t = c.currentTime, dur = 0.3;
+  const n = c.createBufferSource();
+  const buf = c.createBuffer(1, c.sampleRate * dur, c.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  n.buffer = buf;
+  const bp = c.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = 0.7;
+  bp.frequency.setValueAtTime(dir === 1 ? 700 : 2400, t);
+  bp.frequency.exponentialRampToValueAtTime(dir === 1 ? 2400 : 600, t + dur * 0.9);
+  const g = c.createGain(); g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.14, t + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  n.connect(bp).connect(g).connect(c.destination); n.start(t); n.stop(t + dur + 0.02);
+  if (dir === 1) setTimeout(() => { noiseClick(0.015, 0.12); tone(120, 0.04, "sine", 0.1); }, 340);
+}
 let alarmedFor: string | null = null; // timerId:sessionId we've already alarmed
 let lastChimeAt = 0;                  // last time the ringing chime re-played
 const CHIME_EVERY_MS = 5_000;         // chime begs until acknowledged; blip stays a one-shot nudge
@@ -615,6 +634,23 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+// ── the index-card editors: pulled up from the desk, tossed away on close ──
+function openEditor(dlg: HTMLDialogElement) { dlg.showModal(); sndSheet(1); }
+async function closeEditor(dlg: HTMLDialogElement) {
+  const card = dlg.querySelector(".index-card") as HTMLElement;
+  sndSheet(-1);
+  if (!reducedMotion()) {
+    card.classList.add("away");
+    await new Promise(r => setTimeout(r, 300));
+    card.classList.remove("away");
+  }
+  dlg.close();
+}
+// Esc = the same toss-away, not an instant vanish
+for (const dlg of [elCardEditor, elTimerEditor]) {
+  dlg.addEventListener("cancel", (e) => { e.preventDefault(); closeEditor(dlg); });
+}
+
 // ── card editor ─────────────────────────────────────────────────
 let editingCardId: string | null = null;
 
@@ -627,9 +663,9 @@ function openCardEditor(card: Card | null) {
   $<HTMLInputElement>("c-deadline").value = card?.deadline ? isoDate(card.deadline) : "";
   const dk = card?.deadlineKind ?? "until";
   (elCardEditor.querySelector(`input[name=dkind][value=${dk}]`) as HTMLInputElement).checked = true;
-  elCardEditor.showModal();
+  openEditor(elCardEditor);
 }
-$("card-cancel").onclick = () => elCardEditor.close();
+$("card-cancel").onclick = () => closeEditor(elCardEditor);
 $<HTMLFormElement>("card-form").onsubmit = async (e) => {
   e.preventDefault();
   const name = $<HTMLInputElement>("c-name").value.trim();
@@ -647,7 +683,7 @@ $<HTMLFormElement>("card-form").onsubmit = async (e) => {
     if (deadline) await dev.configureCard(c.id, { deadline, deadlineKind });
     await dev.slot(c.id); // slot the new card so its timers are visible
   }
-  elCardEditor.close();
+  await closeEditor(elCardEditor);
   await renderAll();
 };
 
@@ -713,9 +749,9 @@ function openTimerEditor(cardId: string, timer: Timer | null) {
   writeDurationMs(timer?.targetMs ?? null);
   $<HTMLSelectElement>("t-alarm").value = timer?.alarmStyle ?? "chime";
   syncTimerModeUI();
-  elTimerEditor.showModal();
+  openEditor(elTimerEditor);
 }
-$("timer-cancel").onclick = () => elTimerEditor.close();
+$("timer-cancel").onclick = () => closeEditor(elTimerEditor);
 $<HTMLFormElement>("timer-form").onsubmit = async (e) => {
   e.preventDefault();
   const name = $<HTMLInputElement>("t-name").value.trim();
@@ -735,7 +771,7 @@ $<HTMLFormElement>("timer-form").onsubmit = async (e) => {
       await dev.switchTimer(t.id); // make the new timer active
     } catch (err) { alert(String(err instanceof Error ? err.message : err)); }
   }
-  elTimerEditor.close();
+  await closeEditor(elTimerEditor);
   await renderAll();
 };
 

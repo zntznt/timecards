@@ -12,7 +12,7 @@
   <!-- Saira Condensed = silkscreen labels. Share Tech Mono = LCD digits.
        Zen Kaku Gothic = card titles + JP flavor. VT323 = the printer's dot-matrix. -->
   <!-- Klee One = the index cards' pencil handwriting (Japanese textbook hand). -->
-  <link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700&family=Share+Tech+Mono&family=Zen+Kaku+Gothic+New:wght@500;700;900&family=VT323&family=Klee+One:wght@400;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700&family=Share+Tech+Mono&family=Zen+Kaku+Gothic+New:wght@500;700;900&family=VT323&family=Klee+One:wght@400;600&family=Oswald:wght@500;700&family=Dela+Gothic+One&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
@@ -25,8 +25,9 @@
       <div class="pr-deck">
         <span class="pr-badge">TIME<b>CARDS</b> <em class="jp">タイムカード ・ TC-580</em></span>
         <span class="pr-cluster">
-          <button id="print-report" class="pr-key primary" title="print the activity report">REPORT</button>
-          <button id="print-settings" class="pr-key alt" title="print the settings sheet">SETUP</button>
+          <button id="print-report" class="pr-key primary" title="print the quick report">QUICK</button>
+          <button id="print-detailed" class="pr-key" title="print the detailed report">DETAILED</button>
+          <button id="print-settings" class="pr-key" title="print the settings sheet">SETUP</button>
           <span class="pr-power" title="power"></span>
         </span>
       </div>
@@ -46,8 +47,7 @@
 
         <section class="stats-summary">
           <div class="p-row"><span>TOTAL TRACKED</span><b id="s-total">0m</b></div>
-          <div class="p-row"><span>CURRENT STREAK</span><b><span id="s-streak">0</span> DAYS 🔥</b></div>
-          <div class="p-row"><span>LONGEST STREAK</span><b id="s-longest">0</b></div>
+          <div class="p-row"><span>SESSIONS</span><b id="s-sessions">0</b></div>
           <div class="p-row"><span>ACTIVE DAYS</span><b id="s-active">0</b></div>
         </section>
 
@@ -55,6 +55,8 @@
           <h3 class="p-lbl">LAST 14 DAYS</h3>
           <div id="s-chart" class="chart"></div>
         </section>
+        <div class="p-streak">CURRENT STREAK ・ <span id="s-streak">0</span> DAYS 🔥</div>
+        <div class="p-row"><span>LONGEST</span><b id="s-longest">0</b></div>
 
         <section class="stats-block">
           <h3 class="p-lbl">BY CARD ・ BY TIMER</h3>
@@ -93,6 +95,24 @@
           <button type="button" class="p-end" data-cut title="tear the sheet off">— ✂ — — — — — — — — — — — —</button>
         </form>
       </div>
+      <!-- THE DETAILED REPORT: a long paged tape printing over the whole screen.
+           Same paper, same mouth; nav is printed ink ON the tape. -->
+      <div id="paper-detailed" class="pr-big" hidden>
+        <div class="pr-big-tape">
+          <div class="p-head">
+            <div class="p-title">TIMECARDS</div>
+            <div class="p-sub">DETAILED REPORT ・ 詳細記録</div>
+            <div class="p-sub" id="pd-stamp"></div>
+          </div>
+          <div id="pd-pages"></div>
+          <div class="pr-big-nav">
+            <button type="button" class="p-btn" id="pd-prev">◀ PREV</button>
+            <span class="pr-big-pgind"><span id="pd-pgno">1</span> / <span id="pd-pgtotal">1</span></span>
+            <button type="button" class="p-btn" id="pd-next">NEXT ▶</button>
+            <button type="button" class="p-btn accent" data-cut>✂ CLOSE</button>
+          </div>
+        </div>
+      </div>
     </header>
 
     <div id="view-device">
@@ -104,7 +124,10 @@
 
       <div class="faceplate">
         <span class="brand">time<b>cards</b></span>
-        <button id="lock-toggle" class="lock-toggle" title="lock the buttons" aria-label="lock">🔓</button>
+        <span class="fp-right">
+          <span class="model jp">TC-580 ・ タイムカード</span>
+          <button id="lock-toggle" class="lock-toggle" title="lock the buttons" aria-label="lock">🔓</button>
+        </span>
       </div>
 
       <div class="lcd-bezel">
@@ -127,6 +150,7 @@
 
       <div class="controls">
         <div class="side left">
+          <button id="mode" class="skey" title="override the next run's mode, once">MODE<span class="jp">モード</span></button>
           <button id="stop" class="skey" title="pause and keep your progress">STOP<span class="jp">ストップ</span></button>
           <button id="finish" class="skey" title="save this run to history">FINISH<span class="jp">セーブ</span></button>
         </div>
@@ -145,14 +169,13 @@
       <!-- TIMER RACK: the slotted card's timers. Tap to switch (suspends/resumes). -->
       <div id="timers" class="rack-area" hidden>
         <div class="slot-label">TIMERS ・ タイマー
-          <button id="add-timer" class="rack-add" title="add a timer">+ ADD</button>
           <span id="rack-count" class="rack-count">00 / 10</span>
         </div>
         <ul id="timer-list" class="rack"></ul>
       </div>
 
       <div class="footstamp">
-        <span>SOLID STATE</span><span>2 × AAA</span><span>MODEL TC-580</span>
+        <span>MADE IN JAPAN</span><span>2 × AAA</span><span>MODEL TC-580</span>
       </div>
     </section>
 

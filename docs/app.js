@@ -46,7 +46,6 @@ const elEject = $                   ("eject");
 const elLock = $                   ("lock-toggle");
 const elTimers = $("timers");
 const elTimerList = $("timer-list");
-const elAddTimer = $                   ("add-timer");
 const elList = $("card-list");
 const elCardEditor = $                   ("card-editor");
 const elTimerEditor = $                   ("timer-editor");
@@ -217,6 +216,9 @@ async function renderDevice() {
   } else elDayCount.hidden = true;
 
   setLamps(v.state, v.locked, v.alarmStyle);
+  // a mode override only survives while ITS timer sits ready
+  if (modeOverride && (v.state !== "ready" || v.timer?.id !== modeOverride.timerId)) modeOverride = null;
+  elMode.disabled = v.locked || v.state !== "ready" || !v.timer;
 
   if (v.state === "empty") {
     elCardName.textContent = "— NO CARD —"; elCardName.classList.add("empty");
@@ -225,6 +227,7 @@ async function renderDevice() {
     elSub.textContent = "⏏ ejected ・ insert a card";
     elBigLabel.textContent = "●"; elBigWord.textContent = "—";
     elBig.disabled = true; elStop.disabled = elFinish.disabled = elReset.disabled = elEject.disabled = true;
+    elMode.disabled = true;
     elTimers.hidden = true;
     return;
   }
@@ -244,14 +247,18 @@ async function renderDevice() {
     return;
   }
   // The LCD's mode line reads the direction of time, like the mock ("COUNTDOWN ▼");
-  // the active timer's NAME lives on the lit rack row below.
-  elTimerName.innerHTML = v.timer.mode === "down" ? "COUNTDOWN <b>▼</b>" : "STOPWATCH <b>▲</b>";
+  // the active timer's NAME lives on the lit rack row below. A one-off MODE
+  // override shows as ONCE until the next start consumes it.
+  const shownMode = modeOverride ? modeOverride.mode : v.timer.mode;
+  elTimerName.innerHTML = (shownMode === "down" ? "COUNTDOWN <b>▼</b>" : "STOPWATCH <b>▲</b>")
+    + (modeOverride ? " ・ ONCE" : "");
   // When finished, the big button stays active and REPEATS the round (press()).
   elBig.disabled = v.locked;
 
   if (v.mode === "down" && v.remainingMs !== null) setReadout(fmtDuration(v.remainingMs));
   else if (v.mode === "up") setReadout(fmtDuration(v.elapsedMs, true));
-  else setReadout(v.timer.mode === "down" && v.timer.targetMs ? fmtDuration(v.timer.targetMs) : "00:00");
+  else if (modeOverride) setReadout(modeOverride.mode === "down" ? fmtDuration(modeOverride.targetMs ?? 0) : "00:00.00");
+  else setReadout(v.timer.mode === "down" && v.timer.targetMs ? fmtDuration(v.timer.targetMs) : "00:00.00");
 
   elBigLabel.textContent = v.state === "finished" ? "↻" : (GLYPH[bigButtonAction(v.state)] ?? "●");
   // The label tells the truth about THIS press (mock review C1/U10: no static START/STOP lie).
@@ -279,17 +286,16 @@ async function renderDevice() {
 
 function renderTimerList(v          ) {
   elTimerList.innerHTML = "";
-  elAddTimer.disabled = v.timers.length >= MAX_TIMERS;
-  elAddTimer.title = elAddTimer.disabled ? `max ${MAX_TIMERS} timers` : "add a timer";
   $("rack-count").textContent = `${String(v.timers.length).padStart(2, "0")} / ${MAX_TIMERS}`;
-  if (v.timers.length === 0) {
-    const li = document.createElement("li");
-    li.className = "timers-empty";
-    li.textContent = "no timers — add one to start tracking";
-    elTimerList.appendChild(li);
-    return;
-  }
   for (const t of v.timers) elTimerList.appendChild(timerRow(t, v.timer?.id ?? null));
+  // the mock's dashed + ADD TIMER row lives IN the rack
+  const maxed = v.timers.length >= MAX_TIMERS;
+  const add = document.createElement("li");
+  add.className = "timer-row add" + (maxed ? " maxed" : "");
+  add.textContent = maxed ? `MAX ${MAX_TIMERS} TIMERS` : "+ ADD TIMER";
+  add.title = maxed ? `max ${MAX_TIMERS} timers` : "add a timer";
+  if (!maxed) add.onclick = () => { if (v.card) openTimerEditor(v.card.id, null); };
+  elTimerList.appendChild(add);
 }
 
 function timerRow(t       , activeId               )                {
@@ -652,8 +658,22 @@ elBinderPage.addEventListener("scroll", () => {
   });
 }, { passive: true });
 
+// ── MODE key: override the NEXT run's mode, once (the engine's press(opts)) ──
+const elMode = $                   ("mode");
+let modeOverride                                                                       = null;
+elMode.onclick = async () => {
+  sndClick();
+  const v = await dev.view();
+  if (v.state !== "ready" || !v.timer || v.locked) return;
+  if (modeOverride) modeOverride = null;   // toggle back to the timer's own mode
+  else if (v.timer.mode === "down") modeOverride = { timerId: v.timer.id, mode: "up", targetMs: null };
+  else modeOverride = { timerId: v.timer.id, mode: "down",
+    targetMs: v.timer.targetMs ?? v.card?.defaultTargetMs ?? 25 * 60_000 };
+  await renderDevice();
+};
+
 // ── device interactions (each key clicks like the mock's) ───────
-elBig.onclick = async () => { sndDome(); await dev.press(); await renderAll(); };
+elBig.onclick = async () => { sndDome(); await dev.press(modeOverride ?? {}); modeOverride = null; await renderAll(); };
 elStop.onclick = async () => { sndClick(); await dev.stop(); await renderAll(); };          // freeze & keep
 elFinish.onclick = async () => { sndBank(); alarmedFor = null; await dev.finish(); await renderAll(); }; // bank to history
 elReset.onclick = async () => { sndClick(); alarmedFor = null; await dev.reset(); await renderAll(); }; // discard
@@ -724,11 +744,6 @@ $                 ("card-form").onsubmit = async (e) => {
 // ── timer editor ────────────────────────────────────────────────
 let editingTimerId                = null;
 let timerEditorCardId                = null;
-
-elAddTimer.onclick = async () => {
-  const cardId = (await dev.view()).card?.id;
-  if (cardId) openTimerEditor(cardId, null);
-};
 
 // Bounded H:M:S entry — discrete units like the physical device, no free text.
 const elH = $                  ("t-h"), elM = $                  ("t-m"), elS = $                  ("t-s");
@@ -844,11 +859,20 @@ function isoDate(ms        )         {
 const elPrinter = $("printer");
 const elPaperReport = $("paper-report");
 const elPaperSettings = $("paper-settings");
+const elPaperDetailed = $("paper-detailed");
 const elStub = elPrinter.querySelector(".pr-stub")               ;
-                                       
+                                                    
 let paperOut                   = null;
 let printBusy = false;
-const paperEl = (k           ) => (k === "report" ? elPaperReport : elPaperSettings);
+const paperEl = (k           ) =>
+  k === "report" ? elPaperReport : k === "settings" ? elPaperSettings : elPaperDetailed;
+// the detailed tape is FIXED and emerges at the mouth's viewport Y — measure it,
+// don't hardcode it (the mock's syncMouthY)
+function syncMouthY() {
+  document.documentElement.style.setProperty("--mouth-y",
+    `${Math.round(elPrinter.getBoundingClientRect().bottom) - 12}px`);
+}
+window.addEventListener("resize", syncMouthY);
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 function randTilt()         { // a cut sheet drifts with a small random tilt — light paper
@@ -865,6 +889,7 @@ function feedStubBack(done            ) {
 async function printPaper(kind           ) {
   printBusy = true;
   if (kind === "report") await renderStats();     // freeze the data onto the paper NOW
+  else if (kind === "detailed") { window.scrollTo({ top: 0 }); syncMouthY(); await renderDetailed(); }
   else fillSettings();
   elPrinter.classList.add("printing", "paper-is-out");
   const el = paperEl(kind);
@@ -901,11 +926,102 @@ function pressPrintKey(kind           ) {
   printPaper(kind);
 }
 $("print-report").onclick = () => pressPrintKey("report");
+$("print-detailed").onclick = () => pressPrintKey("detailed");
 $("print-settings").onclick = () => pressPrintKey("settings");
 // the printed ✂ CUT buttons on the papers themselves
 document.querySelectorAll                   ("[data-cut]").forEach(b => {
   b.onclick = () => { if (!printBusy && paperOut) cutPaper(); };
 });
+
+// ── the DETAILED report: overview / one page per card / session log ──
+let pdPage = 1;
+let pdPageEls                = [];
+function pdRow(label        , value        )              {
+  const r = el("div", "p-row");
+  r.append(el("span", "", label), el("b", "", value));
+  return r;
+}
+function showPdPage(n        ) {
+  pdPage = Math.max(1, Math.min(pdPageEls.length, n));
+  const host = $("pd-pages"); host.innerHTML = "";
+  if (pdPageEls[pdPage - 1]) host.appendChild(pdPageEls[pdPage - 1]);
+  $("pd-pgno").textContent = String(pdPage);
+  $("pd-pgtotal").textContent = String(pdPageEls.length);
+  ($("pd-prev")                     ).disabled = pdPage === 1;
+  ($("pd-next")                     ).disabled = pdPage === pdPageEls.length;
+}
+$("pd-prev").onclick = () => { sndTick(); showPdPage(pdPage - 1); };
+$("pd-next").onclick = () => { sndTick(); showPdPage(pdPage + 1); };
+
+async function renderDetailed() {
+  const { sessions, cards, timers, now } = await dev.statsData();
+  const d = new Date(now);
+  $("pd-stamp").textContent = `${isoDate(now)}  ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const pages                = [];
+
+  // page 1: OVERVIEW
+  const st = Stats.streaks(sessions, now);
+  const ov = el("div", "");
+  const ovLbl = el("h3", "p-lbl", "OVERVIEW ・ 概要"); ov.appendChild(ovLbl);
+  ov.append(
+    pdRow("TOTAL TRACKED", shortDur(Stats.totalMs(sessions, now))),
+    pdRow("SESSIONS", String(sessions.length)),
+    pdRow("ACTIVE DAYS", String(st.activeDays)),
+    pdRow("CURRENT STREAK", `${st.current} DAYS`),
+    pdRow("LONGEST STREAK", `${st.longest} DAYS`),
+    pdRow("CARDS", String(cards.length)),
+    pdRow("TIMERS", String(timers.length)),
+  );
+  pages.push(ov);
+
+  // one page per card: its ledger + per-timer roster
+  for (const c of cards) {
+    const mine = sessions.filter(x => x.cardId === c.id);
+    const total = mine.reduce((a, x) => a + elapsed(x, now), 0);
+    const longest = mine.reduce((a, x) => Math.max(a, elapsed(x, now)), 0);
+    const pg = el("div", "");
+    pg.appendChild(el("h3", "p-lbl", `CARD ・ ${c.name}`));
+    pg.append(
+      pdRow("TOTAL", fmtDuration(total)),
+      pdRow("SESSIONS", String(mine.length)),
+      pdRow("LONGEST", fmtDuration(longest)),
+      pdRow("SINCE", mine.length ? isoDate(Math.min(...mine.map(x => x.startedAt))) : "—"),
+    );
+    const roster = timers.filter(t => t.cardId === c.id);
+    if (roster.length) {
+      pg.appendChild(el("h3", "p-lbl", "BY TIMER"));
+      for (const t of roster) {
+        const tms = mine.filter(x => x.timerId === t.id);
+        const sub = el("div", "pd-sub");
+        sub.append(
+          el("span", "", `${t.mode === "down" ? "▼" : "▲"} ${t.name}`),
+          el("span", "", `${fmtDuration(tms.reduce((a, x) => a + elapsed(x, now), 0))} (${tms.length})`),
+        );
+        pg.appendChild(sub);
+      }
+    }
+    pages.push(pg);
+  }
+
+  // last page: SESSION LOG
+  const log = el("div", "");
+  log.appendChild(el("h3", "p-lbl", "SESSION LOG ・ 記録"));
+  const recents = Stats.recent(sessions, cards, timers, now, 30);
+  if (!recents.length) log.appendChild(el("div", "pd-sub", "no sessions yet"));
+  for (const r of recents) {
+    const when = new Date(r.session.startedAt);
+    const sub = el("div", "pd-sub");
+    sub.append(
+      el("span", "", `${isoDate(r.session.startedAt)} ${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")}  ${r.cardName}/${r.timerName}`),
+      el("span", "", fmtDuration(r.ms)),
+    );
+    log.appendChild(sub);
+  }
+  pages.push(log);
+
+  pdPageEls = pages;
+  showPdPage(1);
+}
 
 // ── stats rendering ─────────────────────────────────────────────
 function shortDur(ms        )         {
@@ -920,6 +1036,7 @@ async function renderStats() {
   const d = new Date(now);
   $("s-stamp").textContent = `${isoDate(now)}  ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   $("s-total").textContent = shortDur(Stats.totalMs(sessions, now));
+  $("s-sessions").textContent = String(sessions.length);
   const st = Stats.streaks(sessions, now);
   $("s-streak").textContent = String(st.current);
   $("s-longest").textContent = String(st.longest);
@@ -947,7 +1064,8 @@ async function renderStats() {
     for (const c of byCard) {
       const block = document.createElement("div"); block.className = "bd-card";
       const head = document.createElement("div"); head.className = "bd-card-head";
-      head.innerHTML = `<span>${escapeHtml(c.name)}</span><span class="bd-ms">${shortDur(c.ms)}</span>`;
+      head.innerHTML = `<span>${escapeHtml(c.name)}</span>` +
+        `<u><i style="width:${Math.round((c.ms / maxCard) * 100)}%"></i></u><b>${shortDur(c.ms)}</b>`;
       block.appendChild(head);
       for (const t of c.timers) {
         const row = document.createElement("div"); row.className = "bd-timer";

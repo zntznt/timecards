@@ -34,7 +34,7 @@ These are distinct on purpose (a common point of confusion):
 | method            | what it does                                         | history? |
 |-------------------|------------------------------------------------------|----------|
 | `stop()`          | **freeze & keep** — pauses and holds the run (readout stays put); resume later | no |
-| `reset()`         | **discard** — clears the run, back to full duration / zero | no |
+| `reset()`         | **discard** — clears the run, back to full duration / zero. A FINISHED countdown banks its round first: that time fully elapsed, earned time can't be discarded | only if finished |
 | `finish()`        | **commit** — banks the run to history, timer goes idle | yes |
 
 Time is banked to history ONLY when a run ends for real: a natural countdown finish,

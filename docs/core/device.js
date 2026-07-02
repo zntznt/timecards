@@ -302,12 +302,17 @@ export class Device {
 
   /** Reset = discard the current run. Clears the active timer's session WITHOUT
    *  writing it to history, so a countdown returns to its full duration / a
-   *  stopwatch to zero. Ignored while locked. */
+   *  stopwatch to zero. Exception: a FINISHED countdown banks its round first —
+   *  that time fully elapsed, and earned time can't be discarded. Ignored while
+   *  locked. */
   async reset()                    {
     const slot = await this.store.getSlot();
     if (slot.locked || !slot.activeTimerId) return this.view();
     const timer = await this.store.getTimer(slot.activeTimerId);
-    if (timer?.liveSession) await this.store.putTimer({ ...timer, liveSession: null }); // no finalize
+    if (timer?.liveSession) {
+      if (T.runState(timer.liveSession, this.now()) === "finished") await this.finalize(timer.liveSession);
+      await this.store.putTimer({ ...timer, liveSession: null });
+    }
     return this.view();
   }
 

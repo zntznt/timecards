@@ -80,6 +80,8 @@ function playAlarm(style: AlarmStyle) {
   beep(660, 180, 0); beep(880, 180, 0.2); beep(1175, 320, 0.42);
 }
 let alarmedFor: string | null = null; // timerId:sessionId we've already alarmed
+let lastChimeAt = 0;                  // last time the ringing chime re-played
+const CHIME_EVERY_MS = 5_000;         // chime begs until acknowledged; blip stays a one-shot nudge
 
 // ── render ──────────────────────────────────────────────────────
 async function renderDevice() {
@@ -142,9 +144,12 @@ async function renderDevice() {
   else if (v.state === "running") { elSub.textContent = v.mode === "down" ? "counting down…" : "tracking…"; }
   else if (v.state === "paused") { elSub.textContent = "paused: press to resume · finish saves · reset discards"; }
   else if (v.state === "finished") {
-    elSub.textContent = "time's up: ↻ repeats · finish saves · reset discards";
+    elSub.textContent = "time's up, round saved · press ↻ to repeat · reset to clear";
     const key = v.timer.id + ":" + (v.timer.liveSession?.id ?? "");
-    if (alarmedFor !== key) { alarmedFor = key; playAlarm(v.alarmStyle); }
+    if (alarmedFor !== key) { alarmedFor = key; lastChimeAt = Date.now(); playAlarm(v.alarmStyle); }
+    else if (v.alarmStyle === "chime" && Date.now() - lastChimeAt >= CHIME_EVERY_MS) {
+      lastChimeAt = Date.now(); playAlarm("chime"); // the tick loop re-renders while finished, so this re-begs
+    }
   }
 }
 

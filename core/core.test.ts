@@ -213,6 +213,22 @@ await test("ringing time doesn't count: late repeat still records the target, no
   assert.equal(await dev.totalMs(card.id), 25_000); // the round, not 70s of wall clock
 });
 
+await test("reset on a finished countdown banks the round (earned time can't be discarded)", async () => {
+  const { dev, tick } = harness();
+  const card = await dev.createCard("Focus", { defaultMode: "down", defaultTargetMs: 25_000 });
+  await dev.slot(card.id);
+  await dev.press();
+  tick(25_000);                               // finishes
+  await dev.reset();                          // clear the alarm
+  assert.equal(await dev.totalMs(card.id), 25_000); // round saved anyway
+  assert.equal((await dev.view()).state, "ready");  // timer back to idle
+
+  await dev.press();                          // start a fresh round…
+  tick(10_000);
+  await dev.reset();                          // …and reset mid-run
+  assert.equal(await dev.totalMs(card.id), 25_000); // mid-run reset still discards
+});
+
 await test("repeat via the big button when finished", async () => {
   const { dev, tick } = harness();
   const card = await dev.createCard("Focus", { defaultMode: "down", defaultTargetMs: 10_000 });

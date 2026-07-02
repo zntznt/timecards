@@ -311,7 +311,7 @@ try {
       out(viewLine(v), v);
       break;
     }
-    case "reset": case "clear": {         // discard the run, back to full / zero
+    case "reset": case "clear": {         // discard the run (a finished round banks first)
       const v = await dev.reset();
       out(viewLine(v), v);
       break;
@@ -444,6 +444,7 @@ DEVICE
                                                  (press when finished = repeat)
   stop                                           freeze & keep (pause, nothing saved)
   reset                                          discard this run, back to full / zero
+                                                 (a finished round is saved first)
   finish                                         bank the run to history, timer idle
   repeat                                         re-run the same countdown (saves the round)
   lock | unlock                                  freeze / unfreeze the big button

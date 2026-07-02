@@ -4,88 +4,145 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>timecards</title>
-  <!-- Inline SVG favicon: a stopwatch dot. Avoids a 404 with no asset file. -->
-  <link rel="icon" href="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'&gt;&lt;circle cx='8' cy='9' r='5' fill='none' stroke='%236ee7b7' stroke-width='1.5'/&gt;&lt;rect x='6.5' y='1' width='3' height='1.6' fill='%236ee7b7'/&gt;&lt;line x1='8' y1='9' x2='8' y2='6' stroke='%236ee7b7' stroke-width='1.2'/&gt;&lt;/svg&gt;" />
+  <meta name="theme-color" content="#c7c2b2" />
+  <!-- Inline SVG favicon: the vermilion dome button. Avoids a 404 with no asset file. -->
+  <link rel="icon" href="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'&gt;&lt;circle cx='8' cy='8' r='6.5' fill='%23e8472a'/&gt;&lt;circle cx='6' cy='6' r='2.2' fill='%23ff8a6e' opacity='.6'/&gt;&lt;/svg&gt;" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- Saira Condensed = silkscreen labels. Share Tech Mono = LCD digits.
+       Zen Kaku Gothic = card titles + JP flavor. VT323 = the printer's dot-matrix. -->
+  <link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700&family=Share+Tech+Mono&family=Zen+Kaku+Gothic+New:wght@500;700;900&family=VT323&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
-  <main id="app">
-    <!-- Header: app name + view toggle -->
-    <header class="appbar">
-      <span class="brand">timecards</span>
-      <nav class="tabs">
-        <button id="tab-device" class="tab active">device</button>
-        <button id="tab-stats" class="tab">stats</button>
-      </nav>
-      <button id="settings-btn" class="icon-btn" title="settings (sync)" aria-label="settings">⚙</button>
+  <main id="app" class="scene">
+
+    <!-- ═══ PRINTER HEADER: the app bar IS the report printer. The view tabs are its
+         keys; the stats view is the receipt it prints below. ═══ -->
+    <header class="pr appbar">
+      <div class="pr-deck">
+        <span class="pr-badge">TIME<b>CARDS</b> <em class="jp">タイムカード ・ TC-580</em></span>
+        <span class="pr-cluster">
+          <button id="tab-device" class="pr-key active">DEVICE</button>
+          <button id="tab-stats" class="pr-key alt">REPORT</button>
+          <button id="settings-btn" class="pr-key tiny" title="settings (sync)" aria-label="settings">⚙</button>
+        </span>
+      </div>
+      <div class="pr-exit">
+        <div class="pr-mouth"></div>
+        <div class="pr-tear"></div>
+        <div class="pr-stub"></div>
+      </div>
     </header>
 
     <!-- DEVICE VIEW -->
     <div id="view-device">
-    <!-- The device: big button + current card readout -->
+
+    <!-- ───────── THE DEVICE ───────── -->
     <section id="device">
-      <button id="lock-toggle" class="lock-toggle" title="lock the buttons" aria-label="lock">🔓</button>
+      <span class="screw tl"></span><span class="screw tr"></span>
+      <span class="screw bl"></span><span class="screw br"></span>
 
-      <div id="card-name" class="card-name">no card</div>
-      <div id="timer-name" class="timer-name"></div>
-      <div id="daycount" class="daycount" hidden></div>
-      <div id="readout" class="readout">00:00</div>
-      <div id="sub" class="sub">slot a card to begin</div>
-
-      <button id="big-button" class="big-button" aria-label="start, pause, or resume">
-        <span id="big-label">●</span>
-      </button>
-
-      <div class="row">
-        <button id="stop" class="ghost" title="pause and keep your progress">stop</button>
-        <button id="finish" class="ghost" title="save this run to history">finish</button>
-        <button id="reset" class="ghost" title="discard this run, back to full">reset</button>
-        <button id="eject" class="ghost" title="remove card">eject</button>
+      <div class="faceplate">
+        <span class="brand">time<b>cards</b></span>
+        <button id="lock-toggle" class="lock-toggle" title="lock the buttons" aria-label="lock">🔓</button>
       </div>
 
-      <!-- The slotted card's timers. Tap to switch (suspends/resumes). -->
-      <div id="timers" class="timers" hidden>
-        <div class="timers-head">
-          <span>timers</span>
-          <button id="add-timer" class="add small">+ timer</button>
+      <div class="lcd-bezel">
+        <div class="lcd">
+          <div class="lcd-top">
+            <span id="card-name" class="lcd-card jp">no card</span>
+            <span id="timer-name" class="lcd-mode"></span>
+          </div>
+          <div id="daycount" class="daycount" hidden></div>
+          <div class="readout">
+            <span id="readout-ghost" class="ghost" aria-hidden="true">88:88</span>
+            <span id="readout" class="live">00:00</span>
+          </div>
+          <div id="sub" class="lcd-sub">slot a card to begin</div>
+          <div class="lcd-ticks">
+            <span id="lamp-run">●RUN</span><span id="lamp-pause">○PAUSE</span><span id="lamp-done">○DONE</span><span id="lamp-alarm">♪ALARM</span><span id="lamp-lock">🔒LOCK</span>
+          </div>
         </div>
-        <ul id="timer-list" class="timer-list"></ul>
+      </div>
+
+      <div class="controls">
+        <div class="side left">
+          <button id="stop" class="skey" title="pause and keep your progress">STOP<span class="jp">ストップ</span></button>
+          <button id="finish" class="skey" title="save this run to history">FINISH<span class="jp">セーブ</span></button>
+        </div>
+        <div class="bigbtn-wrap">
+          <button id="big-button" class="bigbtn" aria-label="start, pause, or resume">
+            <span id="big-label" class="glyph">●</span>
+          </button>
+          <span id="big-word" class="bigbtn-label">START</span>
+        </div>
+        <div class="side right">
+          <button id="reset" class="skey" title="discard this run, back to full">RESET<span class="jp">リセット</span></button>
+          <button id="eject" class="skey" title="remove card">EJECT<span class="jp">イジェクト</span></button>
+        </div>
+      </div>
+
+      <!-- TIMER RACK: the slotted card's timers. Tap to switch (suspends/resumes). -->
+      <div id="timers" class="rack-area" hidden>
+        <div class="slot-label">TIMERS ・ タイマー
+          <button id="add-timer" class="rack-add" title="add a timer">+ ADD</button>
+        </div>
+        <ul id="timer-list" class="rack"></ul>
+      </div>
+
+      <div class="footstamp">
+        <span>SOLID STATE</span><span>2 × AAA</span><span>MODEL TC-580</span>
       </div>
     </section>
 
-    <!-- The deck: your cards. Click to slot, ✎ to edit. -->
-    <section id="deck">
+    <!-- THE BINDER: your cards in welded pockets. Tap to slot, ✎ to edit. -->
+    <section id="deck" class="binder">
       <div class="deck-head">
-        <h2>deck</h2>
-        <button id="add-card" class="add">+ new card</button>
+        <h2 class="deck-title">CARD BINDER <span class="jp">カードバインダー</span></h2>
+        <button id="add-card" class="deck-add">+ NEW CARD</button>
       </div>
-      <ul id="card-list" class="card-list"></ul>
+      <div class="binder__page">
+        <ul id="card-list" class="binder__row"></ul>
+      </div>
     </section>
     </div><!-- /view-device -->
 
-    <!-- STATS VIEW -->
+    <!-- STATS VIEW: the printed report. Same paper idiom as the mock's receipt. -->
     <div id="view-stats" hidden>
-      <section class="stats-summary">
-        <div class="stat-big"><span id="s-total" class="stat-num">0m</span><span class="stat-lbl">total tracked</span></div>
-        <div class="stat-big"><span id="s-streak" class="stat-num">0</span><span class="stat-lbl">day streak 🔥</span></div>
-        <div class="stat-big"><span id="s-longest" class="stat-num">0</span><span class="stat-lbl">longest streak</span></div>
-        <div class="stat-big"><span id="s-active" class="stat-num">0</span><span class="stat-lbl">active days</span></div>
-      </section>
+      <div class="paper">
+        <div class="p-head">
+          <div class="p-title">TIMECARDS</div>
+          <div class="p-sub">ACTIVITY REPORT ・ 活動記録</div>
+          <div class="p-sub" id="s-stamp"></div>
+        </div>
 
-      <section class="stats-block">
-        <h3>last 14 days</h3>
-        <div id="s-chart" class="chart"></div>
-      </section>
+        <section class="stats-summary">
+          <div class="p-row"><span>TOTAL TRACKED</span><b id="s-total">0m</b></div>
+          <div class="p-row"><span>CURRENT STREAK</span><b><span id="s-streak">0</span> DAYS 🔥</b></div>
+          <div class="p-row"><span>LONGEST STREAK</span><b id="s-longest">0</b></div>
+          <div class="p-row"><span>ACTIVE DAYS</span><b id="s-active">0</b></div>
+        </section>
 
-      <section class="stats-block">
-        <h3>by card &amp; timer</h3>
-        <div id="s-breakdown" class="breakdown"></div>
-      </section>
+        <section class="stats-block">
+          <h3 class="p-lbl">LAST 14 DAYS</h3>
+          <div id="s-chart" class="chart"></div>
+        </section>
 
-      <section class="stats-block">
-        <h3>recent sessions</h3>
-        <ul id="s-recent" class="recent-list"></ul>
-      </section>
+        <section class="stats-block">
+          <h3 class="p-lbl">BY CARD ・ BY TIMER</h3>
+          <div id="s-breakdown" class="breakdown"></div>
+        </section>
+
+        <section class="stats-block">
+          <h3 class="p-lbl">RECENT SESSIONS</h3>
+          <ul id="s-recent" class="recent-list"></ul>
+        </section>
+
+        <div class="p-code"></div>
+        <div class="p-foot">THANK YOU ・ ありがとう</div>
+        <div class="p-end">— ✂ — — — — — — — — — — — —</div>
+      </div>
     </div><!-- /view-stats -->
   </main>
 
@@ -95,7 +152,7 @@
       <h3 id="card-title">New card</h3>
       <label>Name<input id="c-name" type="text" required maxlength="40" placeholder="Hobby" /></label>
       <label>Category <span class="opt">(optional)</span><input id="c-category" type="text" maxlength="24" placeholder="hobby" /></label>
-      <label>Color<input id="c-color" type="color" value="#6ee7b7" /></label>
+      <label>Color<input id="c-color" type="color" value="#6f7457" /></label>
       <fieldset>
         <legend>Deadline / streak <span class="opt">(optional)</span></legend>
         <label class="indent">Date <input id="c-deadline" type="date" /></label>

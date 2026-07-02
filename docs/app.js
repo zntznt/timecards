@@ -58,6 +58,28 @@ const elViewDevice = $("view-device");
 const elViewStats = $("view-stats");
 
 const GLYPH                         = { start: "▶", pause: "❚❚", resume: "▶", noop: "●" };
+const WORD                         = { start: "START", pause: "PAUSE", resume: "RESUME", noop: "—" };
+const elGhost = $("readout-ghost");
+const elBigWord = $("big-word");
+
+/** Drive the LCD digits + the all-segments-on ghost behind them. */
+function setReadout(txt        ) {
+  elReadout.textContent = txt;
+  elGhost.textContent = txt.replace(/[0-9]/g, "8");
+}
+
+/** The LCD lamp row: each lamp lights (●/○ + color) from the real state. */
+function setLamps(state        , locked         , alarmStyle         ) {
+  const on = (id        , lit         , litTxt        , dimTxt        ) => {
+    const el = $(id); el.classList.toggle("on", lit); el.textContent = lit ? litTxt : dimTxt;
+  };
+  on("lamp-run", state === "running", "●RUN", "○RUN");
+  on("lamp-pause", state === "paused", "●PAUSE", "○PAUSE");
+  on("lamp-done", state === "finished", "●DONE", "○DONE");
+  const alarmTxt = alarmStyle === "blip" ? "ALARM·BLIP" : alarmStyle === "silent" ? "ALARM·OFF" : "♪ALARM";
+  on("lamp-alarm", state === "finished" && alarmStyle !== "silent", alarmTxt, alarmTxt);
+  on("lamp-lock", locked, "🔒LOCK", "○LOCK");
+}
 
 // ── alarm (WebAudio) ────────────────────────────────────────────
 let audioCtx                      = null;
@@ -98,12 +120,14 @@ async function renderDevice() {
       : `🔥 day ${d.days}`;
   } else elDayCount.hidden = true;
 
+  setLamps(v.state, v.locked, v.alarmStyle);
+
   if (v.state === "empty") {
     elCardName.textContent = "no card"; elCardName.classList.add("empty");
     elTimerName.textContent = "";
-    elReadout.textContent = "00:00";
-    elSub.textContent = "slot a card from your deck to begin";
-    elBigLabel.textContent = "●";
+    setReadout("00:00");
+    elSub.textContent = "slot a card from your binder to begin";
+    elBigLabel.textContent = "●"; elBigWord.textContent = "—";
     elBig.disabled = true; elStop.disabled = elFinish.disabled = elReset.disabled = elEject.disabled = true;
     elTimers.hidden = true;
     return;
@@ -117,9 +141,9 @@ async function renderDevice() {
   // No timer selected (card has none): prompt to add one.
   if (!v.timer) {
     elTimerName.textContent = "no timers yet";
-    elReadout.textContent = "—";
+    setReadout("--:--");
     elSub.textContent = "add a timer to begin";
-    elBigLabel.textContent = "●";
+    elBigLabel.textContent = "●"; elBigWord.textContent = "—";
     elBig.disabled = true; elStop.disabled = elFinish.disabled = elReset.disabled = true;
     return;
   }
@@ -127,11 +151,13 @@ async function renderDevice() {
   // When finished, the big button stays active and REPEATS the round (press()).
   elBig.disabled = v.locked;
 
-  if (v.mode === "down" && v.remainingMs !== null) elReadout.textContent = fmtDuration(v.remainingMs);
-  else if (v.mode === "up") elReadout.textContent = fmtDuration(v.elapsedMs, true);
-  else elReadout.textContent = v.timer.mode === "down" && v.timer.targetMs ? fmtDuration(v.timer.targetMs) : "00:00";
+  if (v.mode === "down" && v.remainingMs !== null) setReadout(fmtDuration(v.remainingMs));
+  else if (v.mode === "up") setReadout(fmtDuration(v.elapsedMs, true));
+  else setReadout(v.timer.mode === "down" && v.timer.targetMs ? fmtDuration(v.timer.targetMs) : "00:00");
 
   elBigLabel.textContent = v.state === "finished" ? "↻" : (GLYPH[bigButtonAction(v.state)] ?? "●");
+  // The label tells the truth about THIS press (mock review C1/U10: no static START/STOP lie).
+  elBigWord.textContent = v.state === "finished" ? "REPEAT" : (WORD[bigButtonAction(v.state)] ?? "—");
 
   // stop = freeze a RUNNING timer; finish = bank any live run to history;
   // reset = discard any live run (running/paused/finished).
@@ -170,6 +196,7 @@ function renderTimerList(v          ) {
 function timerRow(t       , activeId               )                {
   const li = document.createElement("li");
   li.className = "timer-row" + (t.id === activeId ? " active" : "");
+  const led = document.createElement("span"); led.className = "t-led"; // lit by CSS on .active
   const nm = document.createElement("span"); nm.className = "t-nm"; nm.textContent = t.name;
   const cfg = document.createElement("span"); cfg.className = "t-cfg";
   cfg.textContent = t.mode === "down" && t.targetMs ? fmtDuration(t.targetMs) : "stopwatch";
@@ -189,7 +216,7 @@ function timerRow(t       , activeId               )                {
     if (confirm(`Delete timer "${t.name}"? Its time is saved to history.`)) { await dev.deleteTimer(t.id); await renderAll(); }
   };
   li.onclick = async () => { await dev.switchTimer(t.id); await renderAll(); };
-  li.append(nm, cfg, live, edit, del);
+  li.append(led, nm, cfg, live, edit, del);
   return li;
 }
 
@@ -199,7 +226,7 @@ async function renderDeck() {
   elList.innerHTML = "";
   if (cards.length === 0) {
     const li = document.createElement("li");
-    li.className = "empty-deck"; li.textContent = "no cards yet — make one with “+ new card”";
+    li.className = "empty-deck"; li.textContent = "empty binder ・ make a card with + NEW CARD";
     elList.appendChild(li); return;
   }
   for (const c of cards) elList.appendChild(await cardItem(c, active));
@@ -208,19 +235,40 @@ async function renderDeck() {
 async function cardItem(c      , active               )                         {
   const total = await dev.totalMs(c.id);
   const timers = await dev.listTimers(c.id);
+  // A welded binder POCKET holding a die-cut sticker card. The card's own color
+  // drives the frame via --cat; the slotted card's pocket shows an IN USE tag.
   const li = document.createElement("li");
-  li.className = "card-item" + (c.id === active ? " active" : "");
-  const swatch = document.createElement("span");
-  swatch.className = "card-swatch"; swatch.style.background = c.color || "#6ee7b7";
-  const meta = document.createElement("div"); meta.className = "card-meta";
-  const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = c.name;
-  const det = document.createElement("div"); det.className = "det";
-  const bits           = [`${timers.length} timer${timers.length === 1 ? "" : "s"}`];
-  if (c.category) bits.unshift(c.category);
-  if (c.deadline) bits.push((c.deadlineKind ?? "until") === "until" ? "⏰ deadline" : "🔥 streak");
-  det.textContent = bits.join("  ·  ");
-  meta.append(nm, det);
-  const tot = document.createElement("div"); tot.className = "card-total"; tot.textContent = fmtDuration(total);
+  li.className = "pocket" + (c.id === active ? " in-use" : "");
+  const card = document.createElement("div");
+  card.className = "card-sticker";
+  card.style.setProperty("--cat", c.color || "#6f7457");
+
+  const emblem = document.createElement("div"); emblem.className = "card-emblem";
+  emblem.textContent = [...c.name][0]?.toUpperCase() ?? "★";
+  const id = document.createElement("div"); id.className = "card-id";
+  const nm = document.createElement("div"); nm.className = "card-nm jp"; nm.textContent = c.name;
+  const det = document.createElement("div"); det.className = "card-cat";
+  const bits           = [`${timers.length} TIMER${timers.length === 1 ? "" : "S"}`];
+  if (c.category) bits.unshift(c.category.toUpperCase());
+  if (c.deadline) bits.push((c.deadlineKind ?? "until") === "until" ? "⏰ DEADLINE" : "🔥 STREAK");
+  det.textContent = bits.join(" ・ ");
+  id.append(nm, det);
+  const art = document.createElement("div"); art.className = "card-art";
+  art.append(emblem, id);
+
+  const foot = document.createElement("div"); foot.className = "card-foot";
+  const chips = document.createElement("div"); chips.className = "card-timers";
+  for (const t of timers.slice(0, 4)) {
+    const chip = document.createElement("span"); chip.className = "tdot";
+    chip.textContent = t.mode === "down" && t.targetMs ? `⧖ ${fmtDuration(t.targetMs)}` : "⏱ SW";
+    chips.appendChild(chip);
+  }
+  const tot = document.createElement("span"); tot.className = "card-total"; tot.textContent = fmtDuration(total);
+  foot.append(chips, tot);
+
+  const barcode = document.createElement("div"); barcode.className = "barcode";
+  card.append(art, foot, barcode);
+
   const actions = document.createElement("div"); actions.className = "card-actions";
   const edit = document.createElement("button");
   edit.className = "card-edit"; edit.textContent = "✎"; edit.title = "edit card";
@@ -233,7 +281,7 @@ async function cardItem(c      , active               )                         
   };
   actions.append(edit, del);
   li.onclick = async () => { await dev.slot(c.id); await renderAll(); };
-  li.append(swatch, meta, tot, actions);
+  li.append(card, actions);
   return li;
 }
 
@@ -263,7 +311,7 @@ function openCardEditor(card             ) {
   $("card-title").textContent = card ? "Edit card" : "New card";
   $                  ("c-name").value = card?.name ?? "";
   $                  ("c-category").value = card?.category ?? "";
-  $                  ("c-color").value = card?.color ?? "#6ee7b7";
+  $                  ("c-color").value = card?.color ?? "#6f7457";
   $                  ("c-deadline").value = card?.deadline ? isoDate(card.deadline) : "";
   const dk = card?.deadlineKind ?? "until";
   (elCardEditor.querySelector(`input[name=dkind][value=${dk}]`)                    ).checked = true;
@@ -409,8 +457,18 @@ function isoDate(ms        )         {
 
 // ── view toggle: device ⇆ stats ─────────────────────────────────
 let onStats = false;
-function showView(stats         ) {
+async function showView(stats         ) {
+  // Leaving the report = tearing the receipt off: scallop the top edge, let it fall.
+  if (!stats && onStats) {
+    const paper = document.querySelector(".paper");
+    if (paper && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      paper.classList.add("cut");
+      await new Promise(r => setTimeout(r, 560));
+      paper.classList.remove("cut");
+    }
+  }
   onStats = stats;
+  document.body.classList.toggle("on-stats", stats); // the mouth's stub hides while the report is out
   elViewDevice.hidden = stats;
   elViewStats.hidden = !stats;
   elTabDevice.classList.toggle("active", !stats);
@@ -430,6 +488,8 @@ function shortDur(ms        )         {
 
 async function renderStats() {
   const { sessions, cards, timers, now } = await dev.statsData();
+  const d = new Date(now);
+  $("s-stamp").textContent = `${isoDate(now)}  ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   $("s-total").textContent = shortDur(Stats.totalMs(sessions, now));
   const st = Stats.streaks(sessions, now);
   $("s-streak").textContent = String(st.current);

@@ -46,7 +46,7 @@ export class Device {
 
   // ── Cards ──────────────────────────────────────────────────────
   async createCard(name: string, opts: {
-    category?: string; color?: string; id?: string; emblem?: string; foil?: string;
+    category?: string; color?: string; id?: string; emblem?: string; foil?: string; texture?: string;
     // Optional: seed a first timer with this config (else the card starts empty).
     defaultMode?: TimerMode; defaultTargetMs?: number | null; alarmStyle?: AlarmStyle;
   } = {}): Promise<Card> {
@@ -63,6 +63,7 @@ export class Device {
       color: opts.color ?? null,
       emblem: opts.emblem ?? null,
       foil: opts.foil ?? null,
+      texture: opts.texture ?? null,
       nfcUid: null,
       createdAt: this.now(),
       lastTimerId: null,
@@ -81,7 +82,7 @@ export class Device {
   async configureCard(id: string, cfg: {
     deadline?: number | null; deadlineKind?: DeadlineKind;
     category?: string | null; color?: string | null;
-    emblem?: string | null; foil?: string | null;
+    emblem?: string | null; foil?: string | null; texture?: string | null;
   }): Promise<Card> {
     const card = await this.requireCard(id);
     const updated: Card = { ...card, ...stripUndefined(cfg) };

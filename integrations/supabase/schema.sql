@@ -10,6 +10,7 @@ create table if not exists cards (
   nfc_uid       text unique,
   emblem        text,
   foil          text,
+  texture       text,
   created_at    bigint not null,
   last_timer_id text,
   deadline      bigint,
@@ -59,3 +60,4 @@ insert into slot (id) values (0) on conflict do nothing;
 -- migration for projects created before emblem/foil existed:
 --   alter table cards add column if not exists emblem text;
 --   alter table cards add column if not exists foil text;
+--   alter table cards add column if not exists texture text;

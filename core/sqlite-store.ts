@@ -32,6 +32,7 @@ export class SqliteStore implements Storage {
         nfc_uid   TEXT UNIQUE,
         emblem    TEXT,
         foil      TEXT,
+        texture   TEXT,
         created_at INTEGER NOT NULL,
         last_timer_id TEXT,
         deadline      INTEGER,
@@ -135,7 +136,7 @@ export class SqliteStore implements Storage {
   private toCard(r: any): Card {
     return {
       id: r.id, name: r.name, category: r.category, color: r.color, nfcUid: r.nfc_uid,
-      emblem: r.emblem ?? null, foil: r.foil ?? null,
+      emblem: r.emblem ?? null, foil: r.foil ?? null, texture: r.texture ?? null,
       createdAt: r.created_at, lastTimerId: r.last_timer_id ?? null,
       deadline: r.deadline ?? null, deadlineKind: r.deadline_kind ?? "until",
     };
@@ -156,23 +157,23 @@ export class SqliteStore implements Storage {
 
   /** Additive migrations for DBs created before a column existed. */
   private migrate() {
-    for (const col of ["emblem TEXT", "foil TEXT"]) {
+    for (const col of ["emblem TEXT", "foil TEXT", "texture TEXT"]) {
       try { this.db.exec(`ALTER TABLE cards ADD COLUMN ${col}`); } catch { /* already there */ }
     }
   }
 
   // ── Cards ─────────────────────────────────────────────────────
   async createCard(c: Card) {
-    this.db.prepare(`INSERT INTO cards (id,name,category,color,nfc_uid,emblem,foil,created_at,last_timer_id,deadline,deadline_kind)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?)`)
-      .run(c.id, c.name, c.category, c.color, c.nfcUid, c.emblem ?? null, c.foil ?? null, c.createdAt,
+    this.db.prepare(`INSERT INTO cards (id,name,category,color,nfc_uid,emblem,foil,texture,created_at,last_timer_id,deadline,deadline_kind)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
+      .run(c.id, c.name, c.category, c.color, c.nfcUid, c.emblem ?? null, c.foil ?? null, c.texture ?? null, c.createdAt,
            c.lastTimerId ?? null, c.deadline ?? null, c.deadlineKind ?? "until");
   }
   async getCard(id: string) { const r = this.db.prepare(`SELECT * FROM cards WHERE id = ?`).get(id); return r ? this.toCard(r) : null; }
   async listCards() { return this.db.prepare(`SELECT * FROM cards ORDER BY created_at`).all().map(r => this.toCard(r)); }
   async updateCard(c: Card) {
-    this.db.prepare(`UPDATE cards SET name=?,category=?,color=?,nfc_uid=?,emblem=?,foil=?,last_timer_id=?,deadline=?,deadline_kind=? WHERE id=?`)
-      .run(c.name, c.category, c.color, c.nfcUid, c.emblem ?? null, c.foil ?? null, c.lastTimerId ?? null, c.deadline ?? null, c.deadlineKind ?? "until", c.id);
+    this.db.prepare(`UPDATE cards SET name=?,category=?,color=?,nfc_uid=?,emblem=?,foil=?,texture=?,last_timer_id=?,deadline=?,deadline_kind=? WHERE id=?`)
+      .run(c.name, c.category, c.color, c.nfcUid, c.emblem ?? null, c.foil ?? null, c.texture ?? null, c.lastTimerId ?? null, c.deadline ?? null, c.deadlineKind ?? "until", c.id);
   }
   async deleteCard(id: string) {
     this.db.prepare(`DELETE FROM sessions WHERE card_id = ?`).run(id);

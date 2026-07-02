@@ -46,7 +46,7 @@ export class Device {
 
   // ── Cards ──────────────────────────────────────────────────────
   async createCard(name        , opts   
-                                                                                   
+                                                                                                     
                                                                                   
                                                                                       
     = {})                {
@@ -63,6 +63,7 @@ export class Device {
       color: opts.color ?? null,
       emblem: opts.emblem ?? null,
       foil: opts.foil ?? null,
+      texture: opts.texture ?? null,
       nfcUid: null,
       createdAt: this.now(),
       lastTimerId: null,
@@ -81,7 +82,7 @@ export class Device {
   async configureCard(id        , cfg   
                                                           
                                                     
-                                                 
+                                                                          
    )                {
     const card = await this.requireCard(id);
     const updated       = { ...card, ...stripUndefined(cfg) };

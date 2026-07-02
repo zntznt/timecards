@@ -329,6 +329,8 @@ function timerRow(t: Timer, activeId: string | null): HTMLLIElement {
 // documentary back (this card's stats); the pocket's SLOT tab inserts it.
 const flippedCards = new Set<string>();
 const FOILS = ["foil-prism", "foil-gold", "foil-holo", "foil-emerald", "foil-violet"];
+const ALL_FOILS = [...FOILS, "foil-aurora", "foil-sunset", "foil-chrome"];
+const TEXTURES = ["cosmos", "waves", "rays", "pin"];
 function foilFor(id: string): string { // stable per-card foil treatment
   let h = 0;
   for (const ch of id) h = (h * 31 + ch.codePointAt(0)!) | 0;
@@ -390,9 +392,10 @@ async function cardItem(c: Card, active: string | null, index: number, sessions:
   const no = String(index + 1).padStart(3, "0");
   const series = c.category ? c.category.toUpperCase().slice(0, 10) : null;
   const inUse = c.id === active;
-  const foilCls = c.foil && FOILS.includes("foil-" + c.foil) ? "foil-" + c.foil : foilFor(c.id);
+  const foilCls = c.foil && ALL_FOILS.includes("foil-" + c.foil) ? "foil-" + c.foil : foilFor(c.id);
+  const texCls = "tx-" + (c.texture && TEXTURES.includes(c.texture) ? c.texture : "cosmos");
 
-  const li = el("li", `pocket ${foilCls}` + (inUse ? " in-use" : "")) as HTMLLIElement;
+  const li = el("li", "pocket" + (inUse ? " in-use" : "")) as HTMLLIElement;
   li.append(el("span", "pocket__ring"), el("span", "pocket__weld-b"), el("span", "pocket__lip"));
 
   // the pocket tab: SLOT inserts; the slotted pocket wears IN USE (mock review U14/D4)
@@ -401,7 +404,7 @@ async function cardItem(c: Card, active: string | null, index: number, sessions:
   tab.onclick = async (e) => { e.stopPropagation(); if (!inUse) await slotCard(c.id); };
 
   // .card = the drag/positioning wrapper (portaled to <body> mid-gesture, like the mock)
-  const card = el("div", "card" + (flippedCards.has(c.id) ? " flipped resting" : ""));
+  const card = el("div", `card ${foilCls} ${texCls}` + (flippedCards.has(c.id) ? " flipped resting" : ""));
   card.dataset.cardId = c.id;
   const card3d = el("div", "card-3d");
   card3d.style.setProperty("--cat", c.color || "#6f7457");
@@ -724,6 +727,8 @@ function openCardEditor(card: Card | null) {
   $<HTMLInputElement>("c-emblem").value = card?.emblem ?? "";
   const foilRadio = elCardEditor.querySelector(`input[name=cfoil][value="${card?.foil ?? ""}"]`) as HTMLInputElement | null;
   (foilRadio ?? elCardEditor.querySelector('input[name=cfoil][value=""]') as HTMLInputElement).checked = true;
+  const texRadio = elCardEditor.querySelector(`input[name=ctexture][value="${card?.texture ?? ""}"]`) as HTMLInputElement | null;
+  (texRadio ?? elCardEditor.querySelector('input[name=ctexture][value=""]') as HTMLInputElement).checked = true;
   $<HTMLInputElement>("c-deadline").value = card?.deadline ? isoDate(card.deadline) : "";
   const dk = card?.deadlineKind ?? "until";
   (elCardEditor.querySelector(`input[name=dkind][value=${dk}]`) as HTMLInputElement).checked = true;
@@ -738,15 +743,16 @@ $<HTMLFormElement>("card-form").onsubmit = async (e) => {
   const color = $<HTMLInputElement>("c-color").value;
   const emblem = $<HTMLInputElement>("c-emblem").value.trim() || null;
   const foil = (elCardEditor.querySelector("input[name=cfoil]:checked") as HTMLInputElement)?.value || null;
+  const texture = (elCardEditor.querySelector("input[name=ctexture]:checked") as HTMLInputElement)?.value || null;
   const dateStr = $<HTMLInputElement>("c-deadline").value;
   const deadline = dateStr ? new Date(dateStr + "T00:00").getTime() : null;
   const deadlineKind = (elCardEditor.querySelector("input[name=dkind]:checked") as HTMLInputElement).value as DeadlineKind;
   if (editingCardId) {
     await dev.renameCard(editingCardId, name);
-    await dev.configureCard(editingCardId, { category, color, deadline, deadlineKind, emblem, foil });
+    await dev.configureCard(editingCardId, { category, color, deadline, deadlineKind, emblem, foil, texture });
   } else {
     const c = await dev.createCard(name, { category: category ?? undefined, color,
-      emblem: emblem ?? undefined, foil: foil ?? undefined });
+      emblem: emblem ?? undefined, foil: foil ?? undefined, texture: texture ?? undefined });
     if (deadline) await dev.configureCard(c.id, { deadline, deadlineKind });
     await dev.slot(c.id); // slot the new card so its timers are visible
     setTimeout(sndThunk, 350); // ...and it lands in the device once the sheet is away

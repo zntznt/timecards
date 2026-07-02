@@ -20,9 +20,11 @@ export interface Card {
   color: string | null;
   /** The character/emoji on the card's medallion; null = the name's initial. */
   emblem?: string | null;
-  /** Foil treatment for the card face ("prism"|"gold"|"holo"|"emerald"|"violet");
-   *  null = a stable auto pick. */
+  /** Foil treatment for the card face ("prism"|"gold"|"holo"|"emerald"|"violet"|
+   *  "aurora"|"sunset"|"chrome"); null = a stable auto pick. */
   foil?: string | null;
+  /** Base texture under the foil ("cosmos"|"waves"|"rays"|"pin"); null = cosmos. */
+  texture?: string | null;
   /** Physical NFC tag UID once registered (e.g. "04:A2:..."), else null.
    *  Reserved from day one so a reader can do tag -> card lookup later. */
   nfcUid: string | null;

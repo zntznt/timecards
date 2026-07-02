@@ -67,7 +67,7 @@ body::after {
 .scene {
   width: var(--device-w);
   margin: 0 auto;
-  display: flex; flex-direction: column; gap: 20px;
+  display: flex; flex-direction: column; gap: 28px;
   padding-bottom: 48px;
 }
 .jp { font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 500; }
@@ -410,6 +410,7 @@ button { font-family: inherit; }
   position: relative; flex: 0 0 auto; width: min(262px, 80vw); padding: 6px; border-radius: 8px;
   scroll-snap-align: start;
   isolation: isolate;   /* keep the film/tag/action z-indexes INSIDE the pocket */
+  content-visibility: auto; contain-intrinsic-size: 262px 225px;
   background: linear-gradient(160deg, rgba(255,255,255,.26), rgba(255,255,255,.10));
   box-shadow:
     inset 0 0 0 1px rgba(255,255,255,.5),
@@ -424,14 +425,18 @@ button { font-family: inherit; }
   background:
     linear-gradient(74deg, transparent 0 36%, rgba(255,255,255,.30) 44%, rgba(255,255,255,.42) 48%, rgba(255,255,255,.16) 53%, transparent 66%),
     radial-gradient(120% 60% at 50% -12%, rgba(255,255,255,.22), transparent 60%),
-    rgba(255,255,255,.07); }
+    rgba(255,255,255,.07);
+  -webkit-mask: radial-gradient(circle 12px at 78% 0, transparent 12px, #000 13px);
+          mask: radial-gradient(circle 12px at 78% 0, transparent 12px, #000 13px); }
 .pocket__ring { position: absolute; inset: 4px; border-radius: 7px; z-index: 3; pointer-events: none;
   background: rgba(255,255,255,.08);
   -webkit-mask: radial-gradient(closest-side, transparent 70%, #000 86%); mask: radial-gradient(closest-side, transparent 70%, #000 86%); }
 .pocket__weld-b { position: absolute; left: 6px; right: 6px; bottom: 5px; height: 3px; z-index: 4; pointer-events: none;
   background: linear-gradient(rgba(255,255,255,.55), rgba(40,34,20,.18)); filter: blur(.4px); border-radius: 2px; }
 .pocket__lip { position: absolute; left: 6px; right: 6px; top: 5px; height: 8px; z-index: 6; pointer-events: none;
-  box-shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 2px 0 rgba(40,34,20,.12) inset; }
+  box-shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 2px 0 rgba(40,34,20,.12) inset;
+  -webkit-mask: radial-gradient(circle 11px at 78% -2px, transparent 11px, #000 12px);
+          mask: radial-gradient(circle 11px at 78% -2px, transparent 11px, #000 12px); }
 /* the pocket's top-center tab: SLOT inserts the card; the slotted pocket wears IN USE */
 .pocket-tab {
   position: absolute; top: 0; left: 50%; transform: translateX(-50%); z-index: 7;
@@ -521,16 +526,24 @@ button { font-family: inherit; }
 .card-3d .foil::after { content: ""; position: absolute; inset: 0; border-radius: 8px; pointer-events: none;
   background: repeating-linear-gradient(70deg, rgba(255,255,255,.16) 0 2px, transparent 2px 5px);
   mix-blend-mode: screen; }
+.pocket:hover .foil { opacity: 1; }
 .foil-prism .foil { background: conic-gradient(from 0deg, #ff5e7e, #ffd25e, #5effa6, #5ec8ff, #c98bff, #ff5e7e);
   background-size: 180% 180%; filter: saturate(1.3) blur(2px); }
+.foil-prism:hover .foil { animation: spin-holo 1.4s linear infinite; }
+@keyframes spin-holo { to { background-position: 200% 200%; } }
+@keyframes shimmer { from { background-position: 130% 0; } to { background-position: -50% 0; } }
 .foil-gold .foil { background: linear-gradient(115deg, #fff2c0 20%, #e9b94a 40%, #b8862a 50%, #ffe9a8 60%, #c9a23e 80%);
   background-size: 250% 250%; }
+.foil-gold:hover .foil { animation: shimmer 1.1s ease; }
 .foil-holo .foil { background: conic-gradient(from 30deg, #ff6ec7, #ffe96e, #6effb0, #6ec8ff, #c98bff, #ff6ec7);
   background-size: 200% 200%; filter: saturate(1.4); }
+.foil-holo:hover .foil { animation: spin-holo 1.1s linear infinite; }
 .foil-emerald .foil { background: linear-gradient(125deg, #c6ffe9 18%, #4fd6a0 38%, #2a8f7a 50%, #8efce0 62%, #3ec9b0 82%);
   background-size: 250% 250%; }
+.foil-emerald:hover .foil { animation: shimmer 1.1s ease; }
 .foil-violet .foil { background: linear-gradient(120deg, #ffd6f5 16%, #c98bff 36%, #7a5cff 50%, #d6b8ff 64%, #9a6cff 84%);
   background-size: 250% 250%; }
+.foil-violet:hover .foil { animation: shimmer 1.1s ease; }
 
 /* TOP ROW: rarity ・ series ・ No. on an opaque cream plate above the foil */
 .card-rank { display: flex; align-items: center; gap: 8px; position: relative; z-index: 4;
@@ -821,17 +834,14 @@ button { font-family: inherit; }
 .editor .add:active { box-shadow: inset 0 3px 5px rgba(80,45,5,.55); }
 
 /* wider desks: cap the readout, give the scene air */
-@media (min-width: 600px) {
-  .scene { gap: 26px; }
-  .pocket { width: 252px; }
-}
-
 /* one reduced-motion block (mock review D16) */
 @media (prefers-reduced-motion: reduce) {
   .paper.spooling, .paper.cut, .pr-stub.feeding { animation: none; }
   .lcd.waking { animation: none; }
   .card-3d { transition: opacity 1ms; }   /* flip lands instantly, no 3D turn */
   .card, .card.airborne { transition: none; }   /* gesture beats resolve via their timeout clocks */
+  .foil-prism:hover .foil, .foil-gold:hover .foil, .foil-holo:hover .foil,
+  .foil-emerald:hover .foil, .foil-violet:hover .foil { animation: none; }
   #device.finished .bigbtn { animation: none; }
   .bigbtn, .skey, .pr-key, .lock-toggle, .deck-add { transition: none; }
   .binder__page { scroll-behavior: auto; }

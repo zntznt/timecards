@@ -288,8 +288,9 @@ const el = (tag        , cls        , text         ) => {
 const elBinderPage = document.querySelector(".binder__page")               ;
 
 // fill the bench remainder with EMPTY welded sleeves so the page reads as a real
-// binder page with open pockets; the LAST empty sleeve is the "+ add" one (the mock's
-// card-creation entry point).
+// binder page with open pockets. The "+ add" sleeve comes FIRST after the real cards
+// (deviation from the mock, which puts it last: on a phone the bench shows ~1.5
+// pockets, so a trailing + would hide behind a scroll of empties).
 function fillEmptySleeves() {
   elList.querySelectorAll(".pocket--empty").forEach(p => p.remove());
   const POCKET_W = 262;
@@ -297,9 +298,9 @@ function fillEmptySleeves() {
   const fit = Math.ceil(elBinderPage.clientWidth / POCKET_W) + 1;
   const need = Math.max(1, fit - realCount);
   for (let i = 0; i < need; i++) {
-    const empty = el("li", "pocket pocket--empty" + (i === need - 1 ? " pocket--add" : ""));
+    const empty = el("li", "pocket pocket--empty" + (i === 0 ? " pocket--add" : ""));
     empty.append(el("span", "pocket__ring"), el("span", "pocket__weld-b"), el("span", "pocket__lip"));
-    if (i === need - 1) { empty.title = "new card"; empty.onclick = () => { sndClick(); openCardEditor(null); }; }
+    if (i === 0) { empty.title = "new card"; empty.onclick = () => { sndClick(); openCardEditor(null); }; }
     elList.appendChild(empty);
   }
 }

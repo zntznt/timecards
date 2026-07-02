@@ -328,9 +328,10 @@ function timerRow(t       , activeId               )                {
 // Cards flip like the physical stickers they are: TAP turns a card over to its
 // documentary back (this card's stats); the pocket's SLOT tab inserts it.
 const flippedCards = new Set        ();
-const FOILS = ["foil-prism", "foil-gold", "foil-holo", "foil-emerald", "foil-violet"];
-const ALL_FOILS = [...FOILS, "foil-aurora", "foil-sunset", "foil-chrome"];
-const TEXTURES = ["cosmos", "waves", "rays", "pin"];
+// the curated foil structures; legacy stored values alias to the nearest one
+const FOILS = ["foil-holo", "foil-gold", "foil-chrome", "foil-aurora", "foil-cracked", "foil-galaxy", "foil-refractor"];
+const FOIL_ALIAS                         = { prism: "holo", emerald: "aurora", violet: "holo", sunset: "gold" };
+const TEXTURES = ["cosmos", "waves", "rays", "pin", "ichimatsu", "lattice", "dots"];
 function foilFor(id        )         { // stable per-card foil treatment
   let h = 0;
   for (const ch of id) h = (h * 31 + ch.codePointAt(0) ) | 0;
@@ -392,7 +393,8 @@ async function cardItem(c      , active               , index        , sessions 
   const no = String(index + 1).padStart(3, "0");
   const series = c.category ? c.category.toUpperCase().slice(0, 10) : null;
   const inUse = c.id === active;
-  const foilCls = c.foil && ALL_FOILS.includes("foil-" + c.foil) ? "foil-" + c.foil : foilFor(c.id);
+  const chosenFoil = c.foil ? (FOIL_ALIAS[c.foil] ?? c.foil) : null;
+  const foilCls = chosenFoil && FOILS.includes("foil-" + chosenFoil) ? "foil-" + chosenFoil : foilFor(c.id);
   const texCls = "tx-" + (c.texture && TEXTURES.includes(c.texture) ? c.texture : "cosmos");
 
   const li = el("li", "pocket" + (inUse ? " in-use" : ""))                 ;

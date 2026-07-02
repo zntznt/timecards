@@ -18,6 +18,11 @@ export interface Card {
   category: string | null;
   /** Hex color for UI, e.g. "#e8a", or null for a default. */
   color: string | null;
+  /** The character/emoji on the card's medallion; null = the name's initial. */
+  emblem?: string | null;
+  /** Foil treatment for the card face ("prism"|"gold"|"holo"|"emerald"|"violet");
+   *  null = a stable auto pick. */
+  foil?: string | null;
   /** Physical NFC tag UID once registered (e.g. "04:A2:..."), else null.
    *  Reserved from day one so a reader can do tag -> card lookup later. */
   nfcUid: string | null;

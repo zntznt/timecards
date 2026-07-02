@@ -33,11 +33,13 @@ export class SupabaseStore implements Storage {
   // ── row <-> model mapping (snake_case columns) ────────────────
   private toCard(r: any): Card {
     return { id: r.id, name: r.name, category: r.category, color: r.color, nfcUid: r.nfc_uid,
+             emblem: r.emblem ?? null, foil: r.foil ?? null,
              createdAt: r.created_at, lastTimerId: r.last_timer_id ?? null,
              deadline: r.deadline ?? null, deadlineKind: r.deadline_kind ?? "until" };
   }
   private cardRow(c: Card) {
     return { id: c.id, name: c.name, category: c.category, color: c.color, nfc_uid: c.nfcUid,
+             emblem: c.emblem ?? null, foil: c.foil ?? null,
              created_at: c.createdAt, last_timer_id: c.lastTimerId ?? null,
              deadline: c.deadline ?? null, deadline_kind: c.deadlineKind ?? "until" };
   }

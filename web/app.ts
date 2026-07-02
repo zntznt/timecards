@@ -388,10 +388,11 @@ async function cardItem(c: Card, active: string | null, index: number, sessions:
 
   const stars = rarityFor(total);
   const no = String(index + 1).padStart(3, "0");
-  const series = (c.category ?? "SER.01").toUpperCase().slice(0, 10);
+  const series = c.category ? c.category.toUpperCase().slice(0, 10) : null;
   const inUse = c.id === active;
+  const foilCls = c.foil && FOILS.includes("foil-" + c.foil) ? "foil-" + c.foil : foilFor(c.id);
 
-  const li = el("li", `pocket ${foilFor(c.id)}` + (inUse ? " in-use" : "")) as HTMLLIElement;
+  const li = el("li", `pocket ${foilCls}` + (inUse ? " in-use" : "")) as HTMLLIElement;
   li.append(el("span", "pocket__ring"), el("span", "pocket__weld-b"), el("span", "pocket__lip"));
 
   // the pocket tab: SLOT inserts; the slotted pocket wears IN USE (mock review U14/D4)
@@ -410,13 +411,16 @@ async function cardItem(c: Card, active: string | null, index: number, sessions:
   front.appendChild(el("span", "foil"));
 
   const rank = el("div", "card-rank");
-  rank.append(el("span", "rarity", stars), el("span", "card-series", series));
+  rank.title = "rarity grows with tracked time ・ 1h ★★ / 10h ★★★";
+  rank.appendChild(el("span", "rarity", stars));
+  if (series) rank.appendChild(el("span", "card-series", series));   // no filler chip without a category
   const noEl = el("span", "card-no");
+  noEl.title = "pocket number";
   noEl.append(el("span", "l", "No."), el("span", "n", no));
   rank.appendChild(noEl);
 
   const art = el("div", "card-art");
-  const emblem = el("div", "card-emblem", [...c.name][0]?.toUpperCase() ?? "★");
+  const emblem = el("div", "card-emblem", c.emblem?.trim() || ([...c.name][0]?.toUpperCase() ?? "★"));
   const id = el("div", "card-id");
   id.append(el("div", "card-nm jp", c.name), el("div", "card-cat",
     c.category ? c.category.toUpperCase() : `${timers.length} TIMER${timers.length === 1 ? "" : "S"}`));
@@ -435,7 +439,7 @@ async function cardItem(c: Card, active: string | null, index: number, sessions:
   // ── BACK: matte documentary reverse — THIS card's ledger ──
   const back = el("div", "card-back");
   const cbId = el("div", "cb-id");
-  cbId.append(el("span", "", `${series} ・ No.${no}`), el("span", "cb-rank", stars));
+  cbId.append(el("span", "", series ? `${series} ・ No.${no}` : `No.${no}`), el("span", "cb-rank", stars));
   const nameRow = el("div", "cb-name-row");
   nameRow.append(el("div", "cb-name", c.name),
     el("span", "cb-seal", (c.deadlineKind === "since" && c.deadline) ? "STREAK" : c.deadline ? "DEADLINE" : "TIMER"));
@@ -706,6 +710,10 @@ for (const dlg of [elCardEditor, elTimerEditor]) {
 
 // ── card editor ─────────────────────────────────────────────────
 let editingCardId: string | null = null;
+$("c-emblem-chips").addEventListener("click", (e) => {
+  const b = (e.target as HTMLElement).closest("button");
+  if (b) { sndTick(); $<HTMLInputElement>("c-emblem").value = b.textContent ?? ""; }
+});
 
 function openCardEditor(card: Card | null) {
   editingCardId = card?.id ?? null;
@@ -713,6 +721,9 @@ function openCardEditor(card: Card | null) {
   $<HTMLInputElement>("c-name").value = card?.name ?? "";
   $<HTMLInputElement>("c-category").value = card?.category ?? "";
   $<HTMLInputElement>("c-color").value = card?.color ?? "#6f7457";
+  $<HTMLInputElement>("c-emblem").value = card?.emblem ?? "";
+  const foilRadio = elCardEditor.querySelector(`input[name=cfoil][value="${card?.foil ?? ""}"]`) as HTMLInputElement | null;
+  (foilRadio ?? elCardEditor.querySelector('input[name=cfoil][value=""]') as HTMLInputElement).checked = true;
   $<HTMLInputElement>("c-deadline").value = card?.deadline ? isoDate(card.deadline) : "";
   const dk = card?.deadlineKind ?? "until";
   (elCardEditor.querySelector(`input[name=dkind][value=${dk}]`) as HTMLInputElement).checked = true;
@@ -725,14 +736,17 @@ $<HTMLFormElement>("card-form").onsubmit = async (e) => {
   if (!name) return;
   const category = $<HTMLInputElement>("c-category").value.trim() || null;
   const color = $<HTMLInputElement>("c-color").value;
+  const emblem = $<HTMLInputElement>("c-emblem").value.trim() || null;
+  const foil = (elCardEditor.querySelector("input[name=cfoil]:checked") as HTMLInputElement)?.value || null;
   const dateStr = $<HTMLInputElement>("c-deadline").value;
   const deadline = dateStr ? new Date(dateStr + "T00:00").getTime() : null;
   const deadlineKind = (elCardEditor.querySelector("input[name=dkind]:checked") as HTMLInputElement).value as DeadlineKind;
   if (editingCardId) {
     await dev.renameCard(editingCardId, name);
-    await dev.configureCard(editingCardId, { category, color, deadline, deadlineKind });
+    await dev.configureCard(editingCardId, { category, color, deadline, deadlineKind, emblem, foil });
   } else {
-    const c = await dev.createCard(name, { category: category ?? undefined, color });
+    const c = await dev.createCard(name, { category: category ?? undefined, color,
+      emblem: emblem ?? undefined, foil: foil ?? undefined });
     if (deadline) await dev.configureCard(c.id, { deadline, deadlineKind });
     await dev.slot(c.id); // slot the new card so its timers are visible
     setTimeout(sndThunk, 350); // ...and it lands in the device once the sheet is away

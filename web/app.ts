@@ -412,6 +412,7 @@ async function cardItem(c: Card, active: string | null, index: number, sessions:
   // ── FRONT: the Bikkuriman sticker ──
   const front = el("div", "card-face front");
   front.appendChild(el("span", "foil"));
+  front.appendChild(el("span", "tx"));   // the texture ALSO stamps over the foil (embossed, not buried)
 
   const rank = el("div", "card-rank");
   rank.title = "rarity grows with tracked time ・ 1h ★★ / 10h ★★★";

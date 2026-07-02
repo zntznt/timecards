@@ -5,3 +5,8 @@ node_modules/
 .DS_Store
 __pycache__/
 *.pyc
+
+# design/ tracks only the durable artifacts; iteration screenshots stay local
+design/*
+!design/mock.html
+!design/REVIEW.md

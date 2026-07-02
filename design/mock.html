@@ -1,0 +1,2152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>timecards — concept</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<!-- Saira Condensed = silkscreen labels (DIN-ish industrial). Share Tech Mono = LCD-ish.
+     Zen Kaku Gothic = clean grotesque w/ Japanese coverage for card titles + flavor. -->
+<link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700&family=Share+Tech+Mono&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap" rel="stylesheet" />
+<!-- PRINTER's OWN fonts (used by NO other object): Oswald = latin nameplate,
+     Dela Gothic One = its JP (NOT the device's Zen Kaku), VT323 = its dot-matrix print. -->
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=Dela+Gothic+One&family=VT323&display=swap" rel="stylesheet" />
+<style>
+:root {
+  /* ── ONE responsive paper path, computed the SAME everywhere (header parts AND the
+     detailed overlay) so nothing drifts or overflows. Derived from the header's real width
+     = min(540px timer-width, viewport minus the body's 16px×2 padding). The mouth fits
+     inside the header; every print is a hair narrower than the mouth. ── */
+  --header-w: min(540px, calc(100vw - 32px));
+  --mouth-w:  min(340px, calc(var(--header-w) - 40px));
+  --paper-w:  min(320px, calc(var(--header-w) - 60px));
+  /* ── Showa appliance palette: muted fields, one hot accent ── */
+  --desk:      #c7c2b2;   /* workbench mat */
+  --desk-line: #b3ae9d;
+  --shell:     #e4ddc9;   /* cream molded plastic */
+  --shell-hi:  #f0ebdb;   /* plastic highlight */
+  --shell-lo:  #cabf9f;   /* plastic shadow / seam */
+  --shell-edge:#a89c78;
+  --metal:     #b9b6ad;   /* brushed faceplate */
+  --metal-hi:  #d8d5cc;
+  --ink:       #2c2a24;   /* silkscreen dark */
+  --ink-soft:  #6b6655;
+  --lcd-bg:    #99a98e;   /* greyish teal-green LCD */
+  --lcd-bg-lo: #8a9b80;
+  --lcd-dark:  #2f3a2c;   /* live digits */
+  --lcd-ghost: #8ea085;   /* unlit segment ghost */
+  --vermilion: #e8472a;   /* THE accent — used only when something is LIVE */
+  --vermilion-lo:#b8351d;
+  --olive:     #6f7457;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  font-family: "Saira Condensed", sans-serif;
+  background:
+    /* faint grid cutting-mat */
+    repeating-linear-gradient(0deg, transparent 0 39px, var(--desk-line) 39px 40px),
+    repeating-linear-gradient(90deg, transparent 0 39px, var(--desk-line) 39px 40px),
+    radial-gradient(120% 90% at 50% 0%, #d2cdbd 0%, var(--desk) 70%);
+  background-blend-mode: soft-light, soft-light, normal;
+  color: var(--ink);
+  min-height: 100vh;
+  display: flex; align-items: flex-start; justify-content: center;   /* content sits TOGETHER at the top (header → device → binder with normal gaps); on a tall screen there's plain desk below it, on a short screen it scrolls — no stretched mid-void */
+  padding: 0 16px;   /* header bleeds off the top — no desk margin */
+  /* subtle grain via SVG noise */
+  position: relative;
+}
+body::after {
+  content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .05; mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.scene { display:flex; flex-direction:column; align-items:stretch; gap:28px; width:100%; }
+.scene-objects { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
+
+/* ═══════════════ THE DEVICE ═══════════════ */
+.device {
+  width: 540px;
+  background:
+    linear-gradient(180deg, var(--shell-hi), var(--shell) 14%, var(--shell) 86%, var(--shell-lo));
+  border-radius: 22px;
+  padding: 16px;
+  position: relative;
+  box-shadow:
+    0 2px 0 var(--shell-hi) inset,
+    0 -3px 0 var(--shell-lo) inset,
+    0 24px 40px -12px rgba(60,52,30,.55),
+    0 4px 8px rgba(0,0,0,.2);
+  border: 1px solid var(--shell-edge);
+}
+/* corner screws */
+.screw { position: absolute; width: 11px; height: 11px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #d9d2bd, #9c916f);
+  box-shadow: 0 1px 1px rgba(0,0,0,.35), 0 0 0 1px var(--shell-edge); }
+.screw::after { content:""; position:absolute; inset:3px; border-top:1.5px solid #6b6242; transform: rotate(34deg); }
+.screw.tl { top: 9px; left: 9px; } .screw.tr { top: 9px; right: 9px; }
+.screw.bl { bottom: 9px; left: 9px; } .screw.br { bottom: 9px; right: 9px; }
+
+/* top brushed faceplate w/ model + brand */
+.faceplate {
+  background: repeating-linear-gradient(90deg, var(--metal) 0 2px, var(--metal-hi) 2px 3px);
+  border-radius: 12px 12px 4px 4px;
+  border: 1px solid var(--shell-edge);
+  padding: 9px 14px;
+  display: flex; align-items: baseline; justify-content: space-between;
+  box-shadow: 0 1px 0 var(--metal-hi) inset, 0 2px 4px rgba(0,0,0,.18);
+  margin: 4px 6px 14px;
+}
+.brand { font-weight: 700; font-size: 19px; letter-spacing: .14em; color: var(--ink); text-transform: lowercase; }
+.brand b { color: var(--vermilion); }
+.model { font-size: 11px; letter-spacing: .22em; color: var(--ink-soft); font-weight: 600; }
+.jp { font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 500; }
+
+/* right column = the DECK, to the right of the device. Pushed DOWN so its top sits
+   just under the card that sticks out of the device's top-right corner. */
+.right-col { position: relative; display:flex; flex-direction:column; gap: 16px; width: 250px; padding-top: 96px; }
+
+/* ── THE HOLE: a thin opening cut into the DEVICE's top-right corner. The card sticks
+   UP out of it; below the slot line is the device's own chassis surface (no frame). ── */
+.card-slot {
+  position: absolute;
+  top: -44px;                  /* card rises up out of the hole, above the device top */
+  right: 14px;                 /* at the device's right end */
+  width: 184px; height: 92px;
+  z-index: 6;
+  display: flex; align-items: flex-end; justify-content: center;
+  overflow: hidden;            /* clips the card at the slot line — body hidden in device */
+}
+/* the slot LINE = the thin dark opening in the device's surface */
+.slot-line {
+  position: absolute; left: 6px; right: 6px; bottom: 0; height: 7px; z-index: 4; border-radius: 3px;
+  background: linear-gradient(180deg, #14130f, #2a2820);
+  box-shadow: inset 0 2px 3px rgba(0,0,0,.9), 0 1px 0 var(--shell-hi);
+}
+
+/* ── LCD ── */
+.lcd-bezel {
+  margin: 0 6px 16px;
+  background: linear-gradient(180deg, #6c6a60, #4f4d44);
+  border-radius: 10px;
+  padding: 9px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.4) inset, 0 1px 0 #7d7b70;
+}
+.lcd {
+  background:
+    linear-gradient(180deg, var(--lcd-bg) 0%, var(--lcd-bg-lo) 100%);
+  border-radius: 5px;
+  padding: 14px 16px 12px;
+  position: relative; overflow: hidden;
+  box-shadow: 0 0 0 1px #3a3a30 inset, 0 0 24px rgba(40,50,35,.25) inset;
+}
+.lcd::before { /* glass reflection */
+  content:""; position:absolute; top:0; left:0; right:0; height:42%;
+  background: linear-gradient(180deg, rgba(255,255,255,.16), transparent);
+  pointer-events:none;
+}
+.lcd-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+.lcd-card { font-family:"Zen Kaku Gothic New",sans-serif; font-weight:700; font-size:14px; color:var(--lcd-dark); letter-spacing:.02em; }
+.lcd-mode { font-size:11px; letter-spacing:.18em; color:var(--lcd-dark); opacity:.7; font-weight:600; }
+.lcd-mode b { color: var(--vermilion-lo); }
+.readout {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 64px; line-height: .92; font-weight: 400;
+  color: var(--lcd-dark); letter-spacing: .02em;
+  text-align: center; position: relative;
+  text-shadow: 0 1px 0 rgba(255,255,255,.12);
+}
+/* ghost of all-segments-on behind the live digits */
+.readout .ghost { position:absolute; inset:0; color:var(--lcd-ghost); opacity:.45; z-index:0; }
+.readout .live  { position:relative; z-index:1; }
+.lcd-sub { text-align:center; font-size:12px; letter-spacing:.14em; color:var(--lcd-dark); opacity:.72; margin-top:5px; font-weight:600; text-transform:uppercase; }
+.lcd-sub.live { color: var(--vermilion-lo); opacity:1; }
+/* tiny status ticks row */
+.lcd-ticks { display:flex; gap:8px; margin-top:9px; font-size:10px; letter-spacing:.1em; color:var(--lcd-dark); opacity:.6; justify-content:center; }
+.lcd-ticks .on { color:var(--vermilion-lo); opacity:1; }
+
+/* ── control deck ── */
+.controls { display:grid; grid-template-columns: 1fr auto 1fr; align-items:center; gap:10px; margin:6px 8px 4px; }
+
+/* the big vermilion dome button */
+.bigbtn-wrap { display:flex; flex-direction:column; align-items:center; gap:18px; padding-bottom:2px; }
+.bigbtn {
+  width: 116px; height: 116px; border-radius: 50%;
+  border: none; cursor: pointer; position: relative;
+  background:
+    radial-gradient(circle at 38% 30%, var(--vermilion) 0%, var(--vermilion) 55%, var(--vermilion-lo) 100%);
+  box-shadow:
+    0 0 0 5px var(--shell-lo),
+    0 0 0 6px var(--shell-edge),
+    0 9px 0 var(--vermilion-lo),
+    0 14px 18px rgba(120,30,15,.45),
+    inset 0 4px 8px rgba(255,255,255,.35),
+    inset 0 -6px 10px rgba(0,0,0,.25);
+  transition: transform .07s ease, box-shadow .07s ease;
+  display:flex; align-items:center; justify-content:center;
+  color:#fff;
+}
+.bigbtn:active, .device.running .bigbtn {
+  transform: translateY(6px);
+  box-shadow:
+    0 0 0 5px var(--shell-lo),
+    0 0 0 6px var(--shell-edge),
+    0 3px 0 var(--vermilion-lo),
+    0 6px 10px rgba(120,30,15,.4),
+    inset 0 4px 8px rgba(255,255,255,.3),
+    inset 0 -6px 10px rgba(0,0,0,.3);
+}
+.bigbtn .glyph { font-size:38px; filter: drop-shadow(0 1px 1px rgba(0,0,0,.3)); }
+.bigbtn-label { font-size:11px; font-weight:700; letter-spacing:.18em; color:var(--ink-soft); }
+
+/* side small buttons */
+.side { display:flex; flex-direction:column; gap:9px; }
+.skey {
+  font-family:"Saira Condensed",sans-serif; font-weight:700; letter-spacing:.12em;
+  font-size:12px; text-transform:uppercase; color:var(--ink);
+  background: linear-gradient(180deg, var(--shell-hi), #d3ca b0);
+  background: linear-gradient(180deg, var(--shell-hi), #d3cab0);
+  border:1px solid var(--shell-edge); border-radius:7px; padding:8px 6px; cursor:pointer;
+  box-shadow: 0 2px 0 var(--shell-lo), 0 3px 4px rgba(0,0,0,.15), inset 0 1px 0 rgba(255,255,255,.5);
+  transition: transform .06s, box-shadow .06s;
+}
+.skey:active { transform: translateY(2px); box-shadow: 0 0 0 var(--shell-lo), inset 0 1px 3px rgba(0,0,0,.2); }
+.skey .jp { display:block; font-size:9px; letter-spacing:.04em; color:var(--ink-soft); margin-top:1px; }
+.side.left { align-items:stretch; } .side.right { align-items:stretch; }
+
+/* ── timer rack: DARK recessed instrument panel (channel-strip labels) ── */
+.rack-area { margin: 16px 6px 8px; }
+.rack-count { margin-left:auto; font-family:"Share Tech Mono"; font-size:10px; color:var(--ink-soft); letter-spacing:.05em; }
+.rack {
+  /* a dark slot milled into the machine */
+  background: linear-gradient(180deg, #25241e, #1b1a15);
+  border:1px solid #100f0c; border-radius:7px; padding:6px;
+  box-shadow: inset 0 3px 8px rgba(0,0,0,.7), 0 1px 0 var(--shell-hi);
+  display:flex; flex-direction:column; gap:3px;
+}
+.trow {
+  display:flex; align-items:center; gap:10px; width:100%;
+  font-family:"Share Tech Mono", monospace; text-align:left;
+  background: linear-gradient(180deg, #34332b, #2a2922);
+  border:1px solid #14130f; border-radius:4px; padding:8px 11px; cursor:pointer;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+  transition: background .1s, box-shadow .1s;
+}
+.trow:hover { background: linear-gradient(180deg,#3c3b32,#302f27); }
+.trow:active { box-shadow: inset 0 2px 4px rgba(0,0,0,.5); }
+/* indicator LED — dim amber idle, vermilion + glow when active */
+.t-led { width:8px; height:8px; border-radius:50%; flex:0 0 auto;
+  background: #4a3f2e; box-shadow: inset 0 0 2px #000; }
+.t-name { font-weight:400; font-size:13px; color:#b9b3a0; letter-spacing:.06em; text-transform:uppercase; }
+.t-cfg { margin-left:auto; font-size:11px; color:#7e7a6a; letter-spacing:.04em; }
+/* the lit (active) timer: backlit label, vermilion LED, brighter text */
+.trow.lit { background: linear-gradient(180deg, #45342c, #38291f);
+  box-shadow: inset 0 0 0 1px var(--vermilion-lo), inset 0 0 14px rgba(232,71,42,.25); }
+.trow.lit .t-led { background: radial-gradient(circle at 35% 30%, #ff8a6e, var(--vermilion));
+  box-shadow: 0 0 7px var(--vermilion), 0 0 2px #fff inset; }
+.trow.lit .t-name { color: #ffd9cd; }
+.trow.lit .t-cfg { color: #ffb09c; }
+.trow.add { justify-content:center; color:#8a856f; font-weight:400; letter-spacing:.18em; font-size:10px; text-transform:uppercase;
+  background: repeating-linear-gradient(45deg, #232219 0 6px, #2a2920 6px 12px); border-style:dashed; border-color:#3a392f; }
+.trow.add:hover { color:#b9b3a0; }
+
+.slot-label { font-size:10px; letter-spacing:.22em; color:var(--ink-soft); font-weight:600; margin-bottom:6px; display:flex; gap:8px; align-items:center; }
+.slot-label::before, .slot-label::after { content:""; height:1px; flex:1; background:var(--shell-edge); opacity:.5; }
+.slot-label .rack-count { flex:0 0 auto; }
+.rack-label { margin-top:14px; }
+
+/* THE CARD STICKING UP OUT OF THE SLOT. The slot's overflow:hidden clips it at the
+   slot line, so only the part ABOVE the line shows — the body is hidden in the device. */
+.slotted-card {
+  --cat: var(--olive);
+  width: 90%; position: relative;
+  display:flex; align-items:center; gap:10px;
+  /* die-cut white edge + colored frame (Bikkuriman sticker) */
+  background: var(--cat);
+  border: 2.5px solid #fdfaf0;
+  border-radius: 9px;
+  padding: 9px 11px;
+  box-shadow: 0 -3px 10px rgba(0,0,0,.35), 0 0 0 1.5px color-mix(in srgb, var(--cat) 60%, #000);
+}
+/* printed cardstock face */
+.slotted-card::before {
+  content:""; position:absolute; inset:3px; border-radius:6px; z-index:0;
+  background: linear-gradient(155deg, #faf6ea, #efe7d2 70%, #e3d8bb);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.5);
+}
+.slotted-card > * { position:relative; z-index:2; }
+.slotted-card .sc-emblem {
+  width:34px; height:34px; border-radius:50%; flex:0 0 auto;
+  display:flex; align-items:center; justify-content:center;
+  background: radial-gradient(circle at 38% 30%, color-mix(in srgb, var(--cat) 50%, #fff), var(--cat));
+  color:#fff6ec; font-size:18px;
+  box-shadow: inset 0 -2px 4px rgba(0,0,0,.3), inset 0 1px 2px rgba(255,255,255,.5), 0 0 0 2px #fdfaf0, 0 0 0 3px var(--cat);
+}
+.slotted-card .sc-id { display:flex; flex-direction:column; min-width:0; }
+.slotted-card .sc-name { font-family:"Zen Kaku Gothic New"; font-weight:900; font-size:17px; color:var(--ink); line-height:1; }
+.slotted-card .sc-no { font-family:"Share Tech Mono"; font-size:9px; letter-spacing:.06em; color:var(--ink-soft); margin-top:3px; }
+
+.footstamp { display:flex; justify-content:space-between; margin:12px 8px 2px; font-size:9px; letter-spacing:.14em; color:var(--ink-soft); opacity:.7; font-weight:600; }
+
+/* ═══════════════ THE DECK (collectible cards) ═══════════════ */
+.deck { width: 100%; }
+.deck-head { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px; padding:0 2px; }
+.deck-title { font-weight:700; letter-spacing:.2em; font-size:13px; color:var(--ink); text-transform:uppercase; }
+.deck-title .jp { font-size:11px; color:var(--ink-soft); margin-left:6px; }
+.deck-count { font-size:11px; color:var(--ink-soft); letter-spacing:.1em; font-weight:600; }
+
+.cards { display:flex; flex-direction:column; gap:18px; }
+/* ── premium trading card: thick stock, raised holo frame, rarity, art zone ── */
+.card {
+  --cat: var(--olive);
+  /* .card is now just the positioning/drag wrapper — the colored frame lives on
+     .card-3d so it ROTATES with the faces (a flat slab here would persist mid-flip
+     and kill the turn-over illusion). */
+  background: transparent;
+  border-radius: 14px;
+  position: relative; cursor: grab;
+  touch-action: pan-x;   /* horizontal swipe still scrolls the bench; vertical drag is captured by JS to pick the card up (works on touch + mouse) */
+  /* no shadow here — the drop shadow lives on .card-3d so it rotates WITH the card
+     (a static shadow on this non-rotating wrapper stays flat during the flip) */
+  transition: transform .14s ease;
+}
+.card:hover { transform: translateY(-4px) rotate(-.5deg) scale(1.015); }
+/* LIFTED OUT of the pocket — the card leaves the binder, turns over in mid-air, and
+   comes to rest ON TOP of the page (above its pocket, no longer tucked under the lip).
+   It goes position:fixed for the whole gesture so it escapes the binder scroller's
+   overflow clip (overflow-x:auto forces overflow-y:auto → it would otherwise be cut off
+   at the page's top edge). JS sets left/width/top in viewport px; we just animate `top`. */
+.card.airborne {
+  position:fixed; z-index:300; margin:0; cursor:default;
+  /* gentle ease-in-out both ends (no sudden start) — same curve & per-distance speed as
+     the flip, so every beat of the gesture shares one trajectory feel. */
+  transition: top .22s cubic-bezier(.45,.05,.55,.95);
+}
+.card.airborne:hover { transform:none; }            /* no flow-hover wobble while flying */
+/* RESTING flipped — back INSIDE its pocket (so it scrolls natively with the bench, no JS
+   chase / no lag), flipped, and sitting at the SAME height as every other card (no lift —
+   flipped and unflipped cards must rest level). It just keeps a raised z + float shadow. */
+.card.resting { z-index:200; cursor:default; }
+/* No 0-blur ring layer in either state — at rest the card has none, so a ring on the back /
+   during the lift made the card look like it gained a border AND grew ~3px (a 1.5px spread
+   shadow inflates the visual box on all sides). Just the float drop shadow + inset. */
+.card.resting .card-3d { box-shadow:
+  0 22px 34px -10px rgba(40,34,18,.6),
+  inset 0 1px 0 rgba(255,255,255,.6); }
+/* a faint cast shadow under the lifted card so it reads as hovering above the page */
+.card.airborne .card-3d { box-shadow:
+  0 22px 34px -10px rgba(40,34,18,.6),
+  inset 0 1px 0 rgba(255,255,255,.6); }
+/* the lift shadow rides on .card-3d so it rotates WITH the card during a flip
+   (a shadow on the static .card stays a flat full-rect box mid-turn).
+   :not(.airborne) — while the card is lifted/flipping, the gesture owns every visual;
+   hover must NOT swap the shadow (or fade the foil) mid-turn under the cursor. */
+/* hover lift — just a deeper drop shadow. No 0-blur ring layer here: at rest the card has
+   no such ring, so adding one on hover read as an extra border popping in. */
+.card:not(.airborne):hover .card-3d { box-shadow:
+  0 16px 28px -6px rgba(60,52,30,.55),
+  inset 0 1px 0 rgba(255,255,255,.6); }
+/* suppress the hover tilt only while the gesture is actively running (mid-flip / in flight);
+   a settled card — front OR flipped-and-resting — gets the same slight hover tilt. */
+.card.flipping:hover, .card.airborne:hover { transform:none; }
+.card:active { cursor: grabbing; }
+/* inner face — now a DEEP JEWEL base (per-category) so the always-on foil reads as a
+   live holographic substrate over it (figure-ground inversion). Plus a faint cosmic
+   sparkle field + inner light beam baked into the background. */
+.card-face {
+  background:
+    radial-gradient(2px 2px at 22% 26%, rgba(255,247,210,.9), transparent),
+    radial-gradient(1.5px 1.5px at 71% 20%, rgba(255,255,255,.85), transparent),
+    radial-gradient(2px 2px at 85% 60%, rgba(255,240,180,.7), transparent),
+    radial-gradient(1.5px 1.5px at 33% 70%, rgba(255,247,210,.7), transparent),
+    repeating-conic-gradient(from 0deg at 50% 38%, rgba(255,250,225,.05) 0 6deg, transparent 6deg 14deg),
+    linear-gradient(158deg, color-mix(in srgb, var(--cat) 60%, #0d0b1a) 0%, color-mix(in srgb, var(--cat) 80%, #07060f) 100%);
+  border-radius: 10px; padding: 9px 11px; position: relative; overflow: hidden;
+  display: flex; flex-direction: column; gap: 8px;
+  min-height: 200px;        /* footprint stays WIDER than tall (card is ~250 wide); back fits within */
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.18), inset 0 -10px 18px rgba(0,0,0,.35);
+}
+/* the hero art band absorbs the extra height → bigger halo presence, still a sticker */
+.card-art { flex:1 1 auto; }
+/* foil overlay (full-face). The .foil-* rules below set its look. */
+.card .foil { position:absolute; inset:0; border-radius:10px; pointer-events:none; }
+
+/* TOP ROW: rarity ・ series ・ No. — on its OWN opaque cream plate above the foil */
+.card-rank { display:flex; align-items:center; gap:8px; position:relative; z-index:4;
+  background:rgba(250,246,234,.93); border:1px solid color-mix(in srgb,#caa23e 60%, transparent);
+  border-radius:5px; padding:2px 7px; }
+/* rarity stars: gradient GOLD (a Bikkuriman signature) */
+.rarity { font-size:12px; letter-spacing:1px;
+  background:linear-gradient(#fff7d6,#e3bd5c 45%,#a9802a); -webkit-background-clip:text; background-clip:text;
+  color:transparent; -webkit-text-fill-color:transparent; text-shadow:0 1px 0 rgba(0,0,0,.2); }
+/* series → a foil-STAMPED chrome shield (hex clip-path), gold gradient fill */
+.card-series { font-family:"Share Tech Mono"; font-size:8px; letter-spacing:.1em; color:#3a2a12; font-weight:700;
+  clip-path:polygon(8% 0,92% 0,100% 50%,92% 100%,8% 100%,0 50%); border:none;
+  background:linear-gradient(180deg,#fff3c4,#e7b84e 45%,#9a6a16); padding:2px 8px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.6), 0 1px 2px rgba(0,0,0,.4);
+  text-shadow:0 1px 0 rgba(255,255,255,.4); }
+.card-no { margin-left:auto; font-family:"Share Tech Mono"; display:flex; align-items:baseline; gap:3px; }
+.card-no .l { font-size:8px; letter-spacing:.1em; color:var(--ink-soft); }
+.card-no .n { font-size:15px; font-weight:700;
+  background:linear-gradient(#fff7d6,#caa23e 55%,#8a6418); -webkit-background-clip:text; background-clip:text;
+  color:transparent; -webkit-text-fill-color:transparent; }
+
+/* ART ZONE: the HERO band — a haloed deity emblem + gold-banner name, dominant.
+   Transparent so the radiant halo + foil show through. */
+.card-art {
+  display:flex; align-items:center; gap:14px; padding:8px 10px; border-radius:8px;
+  position:relative; isolation:isolate;
+}
+/* HALO + SUNBURST radiating behind the emblem (the defining Bikkuriman move).
+   Sized + centered on the emblem so its bloom stays around the medallion, not the name. */
+.card-art::before {
+  content:""; position:absolute; left:42px; top:50%; width:104px; height:104px;
+  transform:translate(-50%,-50%); z-index:0; pointer-events:none;
+  background:
+    radial-gradient(circle, rgba(255,245,205,.92) 0%, rgba(255,238,175,.35) 28%, transparent 56%),
+    repeating-conic-gradient(from 0deg, rgba(255,247,210,.8) 0 4deg, transparent 4deg 9deg);
+  -webkit-mask:radial-gradient(circle,#000 34%,transparent 70%);
+          mask:radial-gradient(circle,#000 34%,transparent 70%);
+}
+/* the emblem → a big haloed medallion (the character window) */
+.card-emblem { width:64px; height:64px; flex:0 0 auto; display:flex; align-items:center; justify-content:center;
+  position:relative; z-index:1; color:#fff6ec; font-size:36px;
+  text-shadow:0 0 1px #fff, 0 1px 0 #caa23e, 0 2px 3px rgba(0,0,0,.45); }
+.card-emblem::after { content:"\2726"; position:absolute; top:-3px; right:-5px; font-size:13px;
+  color:#ffe9a8; text-shadow:0 0 5px #e3bd5c; z-index:2; }
+.card-id { min-width:0; position:relative; z-index:1; }
+/* the NAME → stamped chrome-gold banner type. line-height + padding give the skewed
+   descenders (g/y tails) room so background-clip:text never clips them. */
+.card-id .card-name { font-family:"Zen Kaku Gothic New"; font-weight:900; font-size:21px; line-height:1.25;
+  background:linear-gradient(#ffffff,#ffe9a8 45%,#caa23e 56%,#fff7d6);
+  -webkit-background-clip:text; background-clip:text; color:transparent; -webkit-text-fill-color:transparent;
+  -webkit-text-stroke:1.1px #2a1d0a; paint-order:stroke fill;
+  text-shadow:0 1px 0 rgba(0,0,0,.5), 0 0 6px rgba(255,230,150,.35);
+  transform:skewX(-4deg); transform-origin:left center; white-space:nowrap;
+  padding:1px 3px 2px 1px; margin:-1px -3px -2px -1px; }   /* pad for skew/descenders, negate so layout is unchanged */
+.card-id .card-cat { font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:#ffe7b0; font-weight:700; margin-top:4px;
+  text-shadow:0 1px 2px rgba(0,0,0,.6); }
+
+/* FOOT: timer chips + total — on its OWN opaque cream plate, axis-aligned (never tilted) */
+.card-foot { display:flex; justify-content:space-between; align-items:center; gap:8px;
+  position:relative; z-index:4; background:rgba(250,246,234,.93);
+  border:1px solid color-mix(in srgb,#caa23e 50%, transparent); border-radius:5px; padding:3px 7px; }
+.card-timers { display:flex; gap:4px; flex-wrap:wrap; }
+.tdot { font-size:8px; letter-spacing:.04em; color:#6a4a16; font-weight:700; background:#fff6e0;
+  border-radius:3px; padding:2px 5px; border:1px solid color-mix(in srgb,#caa23e 55%, transparent); white-space:nowrap; }
+.card-total { font-family:"Share Tech Mono"; font-size:14px; color:var(--ink); flex:0 0 auto; }
+/* barcode: a thin printed strip on its own opaque plate (scannable, never tilted) */
+.barcode { height:11px; opacity:.6; position:relative; z-index:4; border-radius:3px;
+  background:
+    linear-gradient(rgba(250,246,234,.93),rgba(250,246,234,.93)),
+    repeating-linear-gradient(90deg, var(--ink) 0 1px, transparent 1px 2px, var(--ink) 2px 4px, transparent 4px 7px, var(--ink) 7px 8px, transparent 8px 12px, var(--ink) 12px 13px, transparent 13px 16px);
+  background-blend-mode:normal; }
+
+/* ═══════════ BIKKURIMAN STICKER TREATMENT ═══════════ */
+/* die-cut sticker: bright white edge + colored card edge — ON .card-3d so the whole
+   sticker (frame included) rotates as one object when it flips. .card stays transparent. */
+.card { background: transparent; border: none; box-shadow: none; }
+.card-3d {
+  background: var(--cat);                       /* the colored card edge */
+  border: 2.5px solid #fdfaf0;                 /* glossy white sticker die-cut */
+  box-shadow:
+    0 0 0 1.5px color-mix(in srgb, var(--cat) 60%, #000),
+    0 8px 18px -5px rgba(60,52,30,.5),          /* drop shadow rotates WITH the card */
+    inset 0 1px 0 rgba(255,255,255,.6);
+}
+/* gold filigree inner frame around the face */
+.card-face::before {
+  content:""; position:absolute; inset:3px; border-radius:8px; pointer-events:none; z-index:3;
+  border: 1.5px solid transparent;
+  background:
+    linear-gradient(135deg, #fff1c0, #e3bd5c 25%, #a9802a 50%, #e8c878 75%, #fff1c0) border-box;
+  -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  box-shadow: inset 0 0 6px rgba(180,140,40,.4);
+}
+
+/* The FOIL: a holographic field that's faintly always-on, blooms on hover.
+   Different .foil-* classes = different foil EFFECTS (selectable per card). */
+.card .foil {
+  position:absolute; inset:0; border-radius:9px; pointer-events:none; z-index:1;
+  mix-blend-mode: screen; opacity:.86; transition: opacity .25s;   /* foil-FIRST: live at rest */
+}
+/* HOLO on EVERY card — a diffraction scanline weave layered over each card's own colour
+   foil, so all cards read as holographic; the .foil-* class only changes the hue beneath. */
+.card .foil::after {
+  content:""; position:absolute; inset:0; border-radius:9px; pointer-events:none;
+  background: repeating-linear-gradient(70deg, rgba(255,255,255,.16) 0 2px, transparent 2px 5px);
+  mix-blend-mode: screen;
+}
+.card:not(.airborne):hover .foil { opacity:1; }   /* no foil flare mid-flip under the cursor */
+/* a fixed diagonal glare streak on every sticker so it reads as glossy at rest */
+.card-face::after {
+  content:""; position:absolute; inset:0; border-radius:9px; pointer-events:none; z-index:2; mix-blend-mode:screen;
+  background: linear-gradient(118deg, transparent 38%, rgba(255,255,255,.55) 47%, rgba(255,255,255,.2) 51%, transparent 60%);
+}
+
+/* prism — classic rainbow holo, sweeps on hover */
+.foil-prism .foil {
+  background: conic-gradient(from 0deg,
+    #ff5e7e, #ffd25e, #5effa6, #5ec8ff, #c98bff, #ff5e7e);
+  background-size: 180% 180%;
+  filter: saturate(1.3) blur(2px);
+}
+.foil-prism:hover .foil { animation: spin-holo 1.4s linear infinite; }
+@keyframes spin-holo { to { background-position: 200% 200%; } }
+
+/* gold — shifting gold-leaf shimmer */
+.foil-gold .foil {
+  background: linear-gradient(115deg, #fff2c0 20%, #e9b94a 40%, #b8862a 50%, #ffe9a8 60%, #c9a23e 80%);
+  background-size: 250% 250%;
+}
+.foil-gold:hover .foil { animation: shimmer 1.1s ease; }
+@keyframes shimmer { from { background-position: 130% 0; } to { background-position: -50% 0; } }
+
+/* holo — full-spectrum conic prism (the holo weave is now shared by every card) */
+.foil-holo .foil {
+  background: conic-gradient(from 30deg, #ff6ec7, #ffe96e, #6effb0, #6ec8ff, #c98bff, #ff6ec7);
+  background-size: 200% 200%;
+  filter: saturate(1.4);
+}
+.foil-holo:hover .foil { animation: spin-holo 1.1s linear infinite; }
+
+/* emerald — cool teal/green linear sweep */
+.foil-emerald .foil {
+  background: linear-gradient(125deg, #c6ffe9 18%, #4fd6a0 38%, #2a8f7a 50%, #8efce0 62%, #3ec9b0 82%);
+  background-size: 250% 250%;
+}
+.foil-emerald:hover .foil { animation: shimmer 1.1s ease; }
+
+/* violet — magenta-to-blue prism band */
+.foil-violet .foil {
+  background: linear-gradient(120deg, #ffd6f5 16%, #c98bff 36%, #7a5cff 50%, #d6b8ff 64%, #9a6cff 84%);
+  background-size: 250% 250%;
+}
+.foil-violet:hover .foil { animation: shimmer 1.1s ease; }
+
+/* emblem = a bright gold-rimmed roundel medallion (the character window) so the hero
+   reads clearly against the dark jewel base */
+.card-emblem {
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 30%, color-mix(in srgb, var(--cat) 25%, #fff), color-mix(in srgb, var(--cat) 70%, #fff));
+  box-shadow:
+    inset 0 -3px 6px rgba(0,0,0,.3), inset 0 2px 3px rgba(255,255,255,.6),
+    0 0 0 2.5px #fdfaf0, 0 0 0 4px #caa23e, 0 0 0 5px #8a6418, 0 2px 6px rgba(0,0,0,.4);
+}
+/* keep card content above the live foil layer */
+.card-art { position:relative; z-index:2; }
+.card-rank, .card-foot, .barcode { z-index:4; }
+
+/* category accents — deepened toward jewel saturation for the foil-first base */
+.card.writing  { --cat:#2f4fd0; }
+.card.cooking  { --cat:#c23a1e; }
+.card.workout  { --cat:#1f9d57; }
+
+/* ═══════════ FLIP + BACK FACE ═══════════ the sticker turns over to a matte
+   documentary Bikkuriman reverse with this card's stats. 3D lives on .card-3d (an
+   INNER wrapper) so the front's hover-lift / drag classes on .card don't fight it. */
+.cards { perspective: 1100px; }                 /* one shared vanishing point down the deck */
+/* The FRONT (the Bikkuriman sticker) defines the card size — it's the hero and must
+   keep its compact sticker proportions. The BACK is absolute, locked to the front's
+   footprint, and its content fits WITHIN that (see .card-back below). */
+.card-3d { position:relative; width:100%; transform-style:preserve-3d;
+  /* gentle ease-in-out, no overshoot — matches the lift/drop curve so the turn-over
+     accelerates and decelerates as softly as the vertical moves. */
+  transition: transform 300ms cubic-bezier(.45,.05,.55,.95);
+  /* the colored die-cut FRAME lives here so it rotates WITH the faces (turns over as
+     one physical object) — no static slab persisting mid-flip */
+  background: var(--cat); border-radius: 14px; padding: 4px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.4); }
+.card-face.front { position:relative; }         /* normal flow → defines card height */
+.card-face.front, .card-back { backface-visibility:hidden; -webkit-backface-visibility:hidden; border-radius:10px; }
+/* inset by the .card-3d padding (4px) so the back occupies the SAME box as the front
+   (which sits inside that padding) — otherwise inset:0 spans the padding box and the
+   back ends up 8px taller than the front. */
+.card-back { position:absolute; inset:4px; transform: rotateY(180deg) translateZ(.01px); }
+.card.flipped .card-3d { transform: rotateY(180deg); }
+/* (the flip lives on .card-3d, the hover tilt on the outer .card — separate elements, so a
+   flipped/resting card can take the same slight hover tilt the front does; no conflict.) */
+.card.flipping { z-index:60; }                  /* lifted card rises above tight neighbors */
+.cards.cards--flipping { overflow:visible; }
+@media (prefers-reduced-motion: reduce) {
+  .card-3d { transition: opacity 1ms; }
+}
+/* the whole card flips on click and drags to the slot — tactile: you turn over or pick
+   up a physical sticker, you don't press a UI button. (cursor:grab stays from .card) */
+
+/* ── THE MATTE BACK: pale newsprint stock, one-ink offset print, no foil/no gold.
+   Compact + flexible so it fits ANY card; the .card-3d grid sizes to it. ── */
+.card-back {
+  background:
+    radial-gradient(120% 90% at 50% 40%, #f1ead9, #e6dcc4 100%),
+    repeating-linear-gradient(0deg, rgba(0,0,0,.03) 0 1px, transparent 1px 3px);
+  color: var(--ink);
+  font-family:"Share Tech Mono", monospace;
+  padding:8px 10px; display:flex; flex-direction:column; gap:4px; overflow:hidden;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.08), inset 0 0 7px rgba(0,0,0,.09);
+}
+.card-back::before { content:""; position:absolute; inset:4px; border:1px solid color-mix(in srgb,var(--cat) 30%, rgba(120,100,60,.4)); border-radius:7px; pointer-events:none; }
+
+/* A. identity strip */
+.cb-id { display:flex; justify-content:space-between; align-items:baseline; font-size:9px; letter-spacing:.04em;
+  color:var(--ink); padding-bottom:3px; border-bottom:1px solid color-mix(in srgb,var(--cat) 45%, transparent); }
+.cb-id .cb-rank { color:color-mix(in srgb,var(--cat) 55%, var(--ink)); font-weight:700; letter-spacing:.1em; }
+
+/* B. name + faction seal */
+.cb-name-row { display:flex; justify-content:space-between; align-items:center; gap:6px; }
+.cb-name { font-family:"Zen Kaku Gothic New"; font-weight:500; font-size:15px; color:var(--ink); line-height:1.25;
+  text-shadow:0 0 .4px currentColor; white-space:nowrap; min-width:0; }
+/* faction seal — a small printed stamp (English faction word), the only saturated accent */
+.cb-seal { flex:0 0 auto; padding:1px 5px; border-radius:3px; font-family:"Share Tech Mono"; font-weight:700;
+  font-size:7px; letter-spacing:.1em; line-height:1.4;
+  color:var(--vermilion); border:1.5px solid var(--vermilion); opacity:.82; transform:rotate(-3deg);
+  text-shadow:0 0 .5px var(--vermilion); }
+
+/* C. stat ledger + nested per-timer roster — tight rows so any card's stats fit */
+.cb-ledger { display:flex; flex-direction:column; gap:1px; }
+.cb-row, .cb-trow { display:flex; align-items:baseline; font-size:9.5px; line-height:1.25; color:var(--ink); }
+.cb-row > span, .cb-trow > span { flex:0 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  letter-spacing:.05em; }
+.cb-row > i, .cb-trow > i { flex:1 1 6px; min-width:6px; border-bottom:1px dotted rgba(0,0,0,.35); margin:0 4px 2px; height:0; }
+.cb-row > b, .cb-trow > b { flex:0 0 auto; font-weight:700; font-size:10.5px; text-align:right; }
+.cb-rule { border-top:1px solid color-mix(in srgb,var(--cat) 35%, rgba(120,100,60,.35)); margin:1px 0; }
+.cb-roster { display:flex; flex-direction:column; gap:0; }
+.cb-trow { font-size:9px; color:var(--ink-soft); }
+.cb-trow > b { font-size:9.5px; color:var(--ink); }
+
+/* E. registration footer */
+.cb-foot { margin-top:2px; }
+.cb-tick { height:4px; background:repeating-linear-gradient(90deg, var(--ink) 0 1px, transparent 1px 3px); opacity:.4; border-radius:1px; }
+.cb-reg { display:flex; justify-content:space-between; align-items:center; font-size:7px; color:var(--ink-soft); margin-top:2px; letter-spacing:.03em; }
+.cb-chop { flex:0 0 auto; width:13px; height:13px; border-radius:50%; border:1px solid var(--vermilion); color:var(--vermilion); opacity:.7;
+  display:flex; align-items:center; justify-content:center; font-size:8px; transform:rotate(4deg); }
+
+/* ── PRINT REPORT key on the device ── */
+.print-key {
+  display:flex; align-items:center; justify-content:center; gap:7px; width:calc(100% - 12px);
+  margin:14px 6px 4px; cursor:pointer;
+  font-family:"Saira Condensed"; font-weight:700; font-size:12px; letter-spacing:.14em; color:var(--ink);
+  background: linear-gradient(180deg, var(--shell-hi), #d3cab0);
+  border:1px solid var(--shell-edge); border-radius:8px; padding:9px;
+  box-shadow: 0 2px 0 var(--shell-lo), 0 3px 5px rgba(0,0,0,.15), inset 0 1px 0 rgba(255,255,255,.5);
+  transition: transform .06s, box-shadow .06s;
+}
+.print-key:active { transform: translateY(2px); box-shadow: 0 0 0 var(--shell-lo), inset 0 1px 3px rgba(0,0,0,.2); }
+.print-key .pk-icon { font-size:15px; }
+.print-key .jp { color:var(--ink-soft); font-size:10px; font-weight:500; }
+
+/* ╔══════════════════════════════════════════════════════════════════╗
+   ║  PRINTER — a self-contained object. Its OWN tokens (--pr-*), OWN    ║
+   ║  fonts (Oswald nameplate, VT323 dot-matrix print), OWN palette       ║
+   ║  (cool grey, not the device's cream). Shares NOTHING but position.   ║
+   ╚══════════════════════════════════════════════════════════════════╝ */
+.pr {
+  width: 540px; max-width: 100%; margin: 0 auto;   /* same width as the timer below, centered; flush at the page top (top corners squared) */
+  display:flex; flex-direction:column; align-items:stretch;
+  position: relative; z-index: 5;   /* sits at the top of the page (first in the scene); positioning context for the receipt that drapes over the device */
+  /* SHARED CRAFT (Kaizen): photoreal molded plastic, real depth, recessed LEDs.
+     OWN IDENTITY: Showa charcoal-and-beige hard ABS (NOT the device's cream, NOT the
+     leather-brown), own forms (adding-machine), own font, own AMBER accent.
+     Rebuilt per a hardware designer's critique: real depth, big roll, metal tear bar,
+     visible black platen, recessed control cluster. */
+  --pr-body:    #4b4a46;   /* charcoal-grey hard ABS body */
+  --pr-body-hi: #62615c;   /* lit top edge */
+  --pr-body-lo: #34332f;   /* shadowed base */
+  --pr-edge:    #232220;   /* parting line / seam */
+  --pr-beige:   #ccc6b6;   /* beige control-panel plastic (the two-tone) */
+  --pr-beige-hi:#ddd8c9;
+  --pr-beige-lo:#aaa491;
+  --pr-metal:   #9c9a92;   /* steel tear bar */
+  --pr-metal-hi:#d2d0c8;
+  --pr-metal-lo:#5e5c56;
+  --pr-platen:  #1a1916;   /* black rubber platen */
+  --pr-dark:    #0e0d0c;   /* recesses */
+  --pr-ink:     #2b2a26;   /* dark label ink on beige */
+  --pr-ink-soft:#6a675e;
+  --pr-amber:   #f4ab3a;   /* the printer's OWN accent — amber lamp, not red */
+  --pr-amber-d: #5c4326;   /* amber, unlit */
+  --pr-paper:   #efece1;   /* receipt stock (FROZEN) */
+  --pr-print:   #2b2a25;   /* printed ink (FROZEN) */
+}
+/* ── the machine is now a full-width HEADER bar: the cream DRP nameplate deck spanning
+   the bench, with a thin exit MOUTH along its bottom edge. The old feeder mechanism
+   (roll lid, tall body shell, tear bar) is gone — the cream deck's top IS the top of
+   the header. Keeps the FROZEN drape-down receipt out of the mouth. ── */
+.pr-machine {
+  width:100%;
+  position: relative; z-index: 1;        /* the paper drapes OVER the mouth — FROZEN */
+  padding: 7px 7px 0;                     /* the dark charcoal ABS frame shows around the cream panel */
+}
+/* the dark charcoal ABS BODY shell — the outer layer of the machine, behind the cream
+   deck + exit. Full-bleed across the header; the cream panel sits inset on it. */
+.pr-machine::before {
+  content:""; position:absolute; inset:0; z-index:-1;
+  background: linear-gradient(180deg, var(--pr-body-hi) 0, var(--pr-body) 14%, var(--pr-body) 82%, var(--pr-body-lo));
+  border:1px solid var(--pr-edge); border-top:none;
+  border-radius: 0 0 8px 8px;   /* square TOP corners — the header meets the top edge of the page flush, no rounded corner showing */
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.18), inset 0 -3px 6px rgba(0,0,0,.4),
+              0 14px 22px -10px rgba(0,0,0,.5);
+}
+
+/* the cream DECK — the control panel: model badge (left) + PRINT cluster (right),
+   spanning the full width, sitting on the dark body. */
+.pr-deck {
+  position:relative; z-index:3; display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding: 12px 20px;
+  background: linear-gradient(180deg, var(--pr-beige-hi), var(--pr-beige) 50%, var(--pr-beige-lo));
+  border:1px solid var(--pr-edge); border-radius: 5px 5px 0 0;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.35), inset 0 -2px 3px rgba(0,0,0,.16);
+}
+/* model badge — stacked, calmer: model number on top, the JP product name below it,
+   so it reads as an engraved nameplate rather than one rushed inline string */
+.pr-badge { text-align:left; display:flex; flex-direction:column; gap:2px; line-height:1; }
+.pr-badge { font-family:"Oswald", sans-serif; font-weight:700; font-size:12px; letter-spacing:.2em; color:var(--pr-ink);
+  text-shadow: 0 1px 0 rgba(255,255,255,.55); }
+.pr-badge em { font-style:normal; font-family:"Dela Gothic One", sans-serif; font-size:7px; color:var(--pr-ink-soft);
+  letter-spacing:.06em; text-shadow:none; }
+/* the right-side control group: a small engraved "PRINT REPORT" label above the keys */
+.pr-controls { display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
+.pr-controls-lbl { font-family:"Oswald",sans-serif; font-weight:600; font-size:6px; letter-spacing:.22em; color:var(--pr-ink-soft);
+  text-shadow:0 1px 0 rgba(255,255,255,.5); }
+.pr-cluster { display:flex; align-items:center; gap:11px; padding:8px 13px; border-radius:8px;
+  background: var(--pr-beige-lo);
+  box-shadow: inset 0 2px 5px rgba(0,0,0,.38), inset 0 -1px 0 rgba(255,255,255,.4); }
+/* the PRINT button — the print action lives on the PRINTER. The printer's OWN amber
+   accent: a real molded plastic key. Pressing DEPRESSES it in place (the highlight
+   flattens, a deep inner shadow appears) rather than moving it down — so its
+   position/shape never changes, but it still feels physical (no hard outline). */
+.pr-print-btn { font-family:"Oswald",sans-serif; font-weight:700; font-size:12px; letter-spacing:.1em; color:#3a2a12;
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+  padding:0 13px; height:28px; border-radius:5px; white-space:nowrap;
+  background: linear-gradient(180deg, #f7be5a 0, var(--pr-amber) 55%, #d8902a 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.6), inset 0 -2px 3px rgba(120,70,10,.45),
+              0 2px 3px rgba(0,0,0,.3);
+  text-shadow: 0 1px 0 rgba(255,255,255,.35); transition: box-shadow .07s, background .07s; }
+/* DETAILED key — same family, a cooler/darker amber so it reads as the secondary action */
+.pr-print-btn.alt {
+  background: linear-gradient(180deg, #e7e1d2 0, #cfc8b6 55%, #b3ab96 100%); color:#42402f;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.7), inset 0 -2px 3px rgba(70,60,30,.3),
+              0 2px 3px rgba(0,0,0,.3); }
+.pr-print-btn:active {
+  /* depressed IN PLACE: highlight flattens, deep inner shadow — no transform */
+  background: linear-gradient(180deg, #d18a28 0, #e09e35 60%, #efb04a 100%);
+  box-shadow: inset 0 3px 5px rgba(80,45,5,.55), inset 0 -1px 1px rgba(255,220,150,.35),
+              0 1px 2px rgba(0,0,0,.25); }
+.pr-print-btn.alt:active {
+  background: linear-gradient(180deg, #b3ab96 0, #c4bda9 60%, #d8d2c1 100%);
+  box-shadow: inset 0 3px 5px rgba(60,50,25,.5), inset 0 -1px 1px rgba(255,255,235,.4),
+              0 1px 2px rgba(0,0,0,.2); }
+.pr-power { width:15px; height:15px; flex:0 0 auto; border-radius:50%;
+  background: radial-gradient(circle at 50% 45%, var(--pr-amber-d) 0 36%, var(--pr-dark) 40%);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.85); }
+.pr.printing .pr-power, .pr.lamp-on .pr-power {
+  background: radial-gradient(circle at 50% 42%, #ffe6a0 0 22%, var(--pr-amber) 26% 38%, var(--pr-dark) 42%);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.4), 0 0 8px var(--pr-amber); }
+
+/* the EXIT bezel — a full-width strip along the header's BOTTOM edge holding the dark
+   mouth the receipt feeds from. Flush to the deck above; rounds off the header's bottom. */
+.pr-exit { position:relative; z-index:3; height:18px; margin:0;
+  background: linear-gradient(180deg, var(--pr-beige-lo), var(--pr-beige-lo) 40%, #9a937f);
+  border:1px solid var(--pr-edge); border-top:none; border-radius:0 0 8px 8px;
+  box-shadow: inset 0 -1px 2px rgba(0,0,0,.2); }
+/* the EXIT slot — a receipt-width dark recessed mouth, CENTERED in the header bar (the
+   ticket emerges from it and is a hair narrower than this opening). */
+.pr-mouth { position:absolute; top:4px; left:50%; transform:translateX(-50%); width:var(--mouth-w); height:9px; border-radius:2px;
+  background: var(--pr-dark);
+  box-shadow: inset 0 2px 5px rgba(0,0,0,.95), inset 0 -1px 1px rgba(255,255,255,.05); }
+/* a CHROME serrated metal TEAR bar at the exit lip — the signature "tear the
+   tape against this" cue. Three distinct VALUES so it reads as polished steel,
+   NOT as white paper: a hard specular top line, a MID-GREY body, a dark underside.
+   The white tape stub passes OVER it and hangs in front (stub z is higher). */
+.pr-tear { position:absolute; top:10px; left:50%; transform:translateX(-50%); width:var(--mouth-w); height:7px; z-index:3;   /* the metal tear bar spans the mouth opening, centered, responsive */
+  background: linear-gradient(180deg,
+    #c8ccd0 0, #dfe3e6 7%,           /* COOL steel highlight (blue-grey, NOT warm white) */
+    #eef1f3 12%, #c2c6ca 20%,        /* one thin hard specular glint line */
+    #8a8d90 38%, #65686b 58%,        /* cool mid-grey steel body */
+    #44464a 82%, #25272b 100%);      /* dark cool underside in shadow */
+  filter: drop-shadow(0 2px 1.5px rgba(0,0,0,.8));
+  /* finer, denser teeth than the paper's torn edge, so the metal edge is distinct */
+  clip-path: polygon(0 0,100% 0,100% 50%,
+    99% 100%,98% 50%,97% 100%,96% 50%,95% 100%,94% 50%,93% 100%,92% 50%,91% 100%,90% 50%,89% 100%,88% 50%,87% 100%,86% 50%,85% 100%,84% 50%,83% 100%,82% 50%,81% 100%,80% 50%,79% 100%,78% 50%,77% 100%,76% 50%,75% 100%,74% 50%,73% 100%,72% 50%,71% 100%,70% 50%,69% 100%,68% 50%,67% 100%,66% 50%,65% 100%,64% 50%,63% 100%,62% 50%,61% 100%,60% 50%,59% 100%,58% 50%,57% 100%,56% 50%,55% 100%,54% 50%,53% 100%,52% 50%,51% 100%,50% 50%,49% 100%,48% 50%,47% 100%,46% 50%,45% 100%,44% 50%,43% 100%,42% 50%,41% 100%,40% 50%,39% 100%,38% 50%,37% 100%,36% 50%,35% 100%,34% 50%,33% 100%,32% 50%,31% 100%,30% 50%,29% 100%,28% 50%,27% 100%,26% 50%,25% 100%,24% 50%,23% 100%,22% 50%,21% 100%,20% 50%,19% 100%,18% 50%,17% 100%,16% 50%,15% 100%,14% 50%,13% 100%,12% 50%,11% 100%,10% 50%,9% 100%,8% 50%,7% 100%,6% 50%,5% 100%,4% 50%,3% 100%,2% 50%,1% 100%,0 50%); }
+/* ALWAYS-VISIBLE tape STUB — the leading tongue of the SAME receipt stock, emerging
+   from the dark slot. Gets the SAME shading + the SAME wavy bottom as the printed
+   receipt, so at rest and printing read as one continuous piece of paper. */
+.pr-stub { position:absolute; top:4px; left:50%; transform:translateX(-50%); width:var(--paper-w); height:30px; z-index:4;  /* SAME responsive width as every printed paper; centered on the mouth; emerges from the mouth top and hangs below at rest */
+  background: linear-gradient(180deg, #f6f3ea 0, var(--pr-paper) 55%, #e7e2d3 100%);  /* warm receipt cream, R>G>B (not cool white) */
+  box-shadow: 0 3px 5px -1px rgba(0,0,0,.45);   /* contact/cast shadow = paper has depth over the bar */
+  /* the SAME wavy scallop bottom as the printed receipt — IDENTICAL values (9px tooth,
+     18px tile, 13px reserved band) so the wave shape matches exactly */
+  --pr-tooth: 9px;
+  -webkit-mask: linear-gradient(#000,#000) no-repeat 0 0/100% calc(100% - 13px),
+                radial-gradient(var(--pr-tooth) at 50% 100%, transparent 98%, #000) repeat-x 0 100%/18px 18px;
+  mask: linear-gradient(#000,#000) no-repeat 0 0/100% calc(100% - 13px),
+        radial-gradient(var(--pr-tooth) at 50% 100%, transparent 98%, #000) repeat-x 0 100%/18px 18px;
+}
+/* the SAME feed shadow the receipt gets (identical 24px gradient): the slot lip casts
+   onto the paper top so the at-rest tongue reads as emerging from BEHIND the slot */
+.pr-stub::before { content:""; position:absolute; left:0; right:0; top:0; height:24px; z-index:1; pointer-events:none;
+  background: linear-gradient(180deg,
+    rgba(14,12,8,.78) 0%, rgba(14,12,8,.58) 16%, rgba(14,12,8,.3) 48%, transparent 100%); }
+/* the stub is hidden while it has BECOME the quick receipt (printing transient OR the
+   whole time the receipt is out via quick-out) — so the feed animation never replays
+   over an already-visible stub. */
+.pr.printing .pr-stub, .pr.printed .pr-stub, .pr.quick-out .pr-stub { opacity:0; }
+/* ...but once it's feeding back in, it must be visible again */
+.pr .pr-stub.feeding { opacity:1; }
+
+/* ── the receipt paper this printer feeds (its OWN look: VT323 dot-matrix print) ── */
+.pr-paper {
+  /* ABSOLUTE so the receipt FLIES OVER the timer below instead of pushing the layout down
+     and leaving a gap. Centered on the mouth (margin-based, so `transform` stays free for the
+     spool/cut animations), top anchored at the mouth. Width = the mouth's opening. */
+  position: absolute; z-index: 3; left: 50%; margin-left: calc(var(--paper-w) / -2);   /* center the responsive receipt (margin-based so transform stays free for spool/cut) */
+  top: var(--mouth-y, 75px);              /* emerges AT the mouth — tracks the mouth's real Y so a taller/shorter header doesn't strand the paper */
+  width: var(--paper-w); padding: 26px 16px 18px;
+  box-shadow: 0 16px 26px -10px rgba(40,38,30,.5);
+  background: var(--pr-paper);
+  font-family: "VT323", monospace; font-size: 16px; line-height: 1.25; color: var(--pr-print);
+  background-image:
+    linear-gradient(var(--pr-paper),var(--pr-paper)),
+    repeating-linear-gradient(0deg, transparent 0 21px, rgba(0,0,0,.03) 21px 22px); /* faint print lines */
+  --pr-tooth: 9px;
+  -webkit-mask: linear-gradient(#000,#000) no-repeat 0 0/100% calc(100% - 13px),
+                radial-gradient(var(--pr-tooth) at 50% 100%, transparent 98%, #000) repeat-x 0 100%/18px 18px;
+  transform-origin: top center;
+}
+/* depth: the slot LIP casts a feed shadow onto the paper, so the receipt reads as
+   emerging from BEHIND the mechanism (not pasted flat on the body). Harder + darker
+   right at the top, fading down. */
+.pr-paper::before {
+  content:""; position:absolute; left:0; right:0; top:0; height:24px; z-index:5; pointer-events:none;
+  background: linear-gradient(180deg,
+    rgba(14,12,8,.78) 0%, rgba(14,12,8,.58) 16%, rgba(14,12,8,.3) 48%, transparent 100%);
+}
+.pr-paper.spooling { animation: pr-spool .7s cubic-bezier(.2,.85,.3,1); }
+@keyframes pr-spool { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 0 0 0); } }
+/* CUT: the receipt is torn off — its TOP edge now also gets the scallop (both ends torn,
+   because it was cut from the roll), and it flies DOWN out of view. */
+.pr-paper.cut {
+  -webkit-mask:
+    radial-gradient(var(--pr-tooth) at 50% 0%, transparent 98%, #000) repeat-x 0 0/18px 18px,
+    linear-gradient(#000,#000) no-repeat 0 13px/100% calc(100% - 26px),
+    radial-gradient(var(--pr-tooth) at 50% 100%, transparent 98%, #000) repeat-x 0 100%/18px 18px;
+  mask:
+    radial-gradient(var(--pr-tooth) at 50% 0%, transparent 98%, #000) repeat-x 0 0/18px 18px,
+    linear-gradient(#000,#000) no-repeat 0 13px/100% calc(100% - 26px),
+    radial-gradient(var(--pr-tooth) at 50% 100%, transparent 98%, #000) repeat-x 0 100%/18px 18px;
+  animation: pr-cut-fall .6s cubic-bezier(.5,0,.75,.4) forwards;
+}
+.pr-paper.cut::before { opacity:0; }   /* no slot-lip shadow once it's a free, cut piece */
+/* falls + drifts to a small RANDOM tilt (--fall-tilt set per-cut in JS). Light paper,
+   so only a few degrees. */
+@keyframes pr-cut-fall {
+  from { transform: translateY(0) rotate(0deg); }
+  to   { transform: translateY(115vh) rotate(var(--fall-tilt, 3deg)); }
+}
+/* FEED: after a cut, a fresh leading tongue feeds DOWN out of the slot to the at-rest
+   spot. Pure clip reveal (top→down) so it emerges from inside the dark mouth and NEVER
+   appears above it. No transform. */
+@keyframes pr-feed-new { from { clip-path: inset(0 0 100% 0); }
+                         to   { clip-path: inset(0 0 0 0); } }
+.pr-stub.feeding { animation: pr-feed-new .55s cubic-bezier(.2,.8,.3,1); }
+.pr-p-head { text-align:center; border-bottom:1px dashed #b3afa2; padding-bottom:7px; margin-bottom:9px; }
+.pr-p-title { font-size:24px; letter-spacing:.14em; line-height:1; }
+.pr-p-sub { font-size:13px; color:#7a766a; letter-spacing:.04em; }
+.pr-p-row { display:flex; justify-content:space-between; }
+.pr-p-row b { font-weight:400; }
+.pr-p-sec { margin:10px 0; }
+.pr-p-lbl { font-size:13px; color:#7a766a; letter-spacing:.1em; border-bottom:1px solid #cfcabb; padding-bottom:2px; margin-bottom:6px; }
+.pr-p-chart { display:flex; align-items:flex-end; gap:3px; height:54px; }
+.pr-p-chart i { flex:1; min-height:2px; background: repeating-linear-gradient(0deg, var(--pr-print) 0 2px, transparent 2px 3px); }
+.pr-p-chart i.hot { background: repeating-linear-gradient(0deg, var(--pr-amber-d) 0 2px, transparent 2px 3px); }
+.pr-p-streak { text-align:center; font-size:17px; margin:7px 0; letter-spacing:.04em; }
+.pr-p-bk { display:flex; align-items:center; gap:8px; }
+.pr-p-bk u { flex:1; height:7px; background:#dcd7c8; text-decoration:none; position:relative; }
+.pr-p-bk u i { position:absolute; inset:0 auto 0 0; background:var(--pr-print); }
+.pr-p-bk b { font-weight:400; }
+.pr-p-rec { display:flex; justify-content:space-between; font-size:14px; }
+.pr-p-code { height:20px; margin:9px 16px 0; background: repeating-linear-gradient(90deg,var(--pr-print) 0 1px,transparent 1px 2px,var(--pr-print) 2px 4px,transparent 4px 7px,var(--pr-print) 7px 9px,transparent 9px 12px); }
+.pr-p-foot { text-align:center; font-size:13px; color:#7a766a; margin-top:10px; letter-spacing:.1em; }
+/* the END-OF-TAPE cut line printed at the very bottom of the receipt (before the tear) */
+.pr-p-end { text-align:center; font-size:13px; color:var(--pr-print); letter-spacing:.06em; margin-top:9px; white-space:nowrap; overflow:hidden; }
+/* the printer's hint text (its own style) */
+.pr-hint { margin-top:14px; font-family:"Oswald",sans-serif; font-weight:500; font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--pr-ink-soft); text-align:center; }
+
+
+.hint { width:100%; text-align:center; margin-top:26px; font-size:12px; letter-spacing:.1em; color:var(--ink-soft); font-weight:600; }
+.hint .jp { font-family:"Zen Kaku Gothic New"; }
+
+/* ── motion: card insert, slot states, LCD flicker-on ── */
+.slot.empty .slotted-card, .card-slot.empty .slotted-card,
+.slot.empty .slot-line, .card-slot.empty .slot-line { display:none; }
+.slot-empty-label { position:absolute; font-size:11px; letter-spacing:.16em; color:var(--ink-soft); opacity:.6; font-weight:600; }
+.slot:not(.empty) .slot-empty-label { display:none; }
+/* the card slides in from below + settles */
+/* card rises up out of the slot lip and settles */
+@keyframes insert { 0%{ transform: translateY(40px); opacity:.3; } 70%{ transform: translateY(-3px); opacity:1; } 100%{ transform: translateY(0); } }
+.slotted-card.inserting { animation: insert .45s cubic-bezier(.3,1.15,.5,1); }
+/* LCD wakes up: a quick contrast/opacity stutter */
+@keyframes flicker { 0%{opacity:.15; filter:contrast(.4);} 12%{opacity:.6;} 20%{opacity:.2;} 40%{opacity:.9; filter:contrast(1.1);} 55%{opacity:.5;} 100%{opacity:1; filter:contrast(1);} }
+.lcd.waking { animation: flicker .5s steps(1,end) forwards; }
+/* a card being pointer-dragged: it's portaled to <body>, fixed, and JS moves it to follow
+   the finger/cursor. Lifted look, doesn't intercept its own pointer events. */
+.card.dragging { position:fixed; z-index:400; margin:0; pointer-events:none; cursor:grabbing;
+  transform: rotate(-2deg) scale(1.04); transition:none; }
+.card.dragging .card-3d { box-shadow:
+  0 0 0 1.5px color-mix(in srgb, var(--cat) 60%, #000),
+  0 26px 40px -10px rgba(40,34,18,.6),
+  inset 0 1px 0 rgba(255,255,255,.6); }
+.card.lifted { transform: translateY(-6px) rotate(-1deg) scale(1.02); box-shadow: 0 18px 30px -8px rgba(60,52,30,.55); cursor:grabbing; }
+
+/* ═══════════ CARD BINDER ═══════════ a full-bench polypropylene binder page: one
+   horizontal scroll row of heat-welded pockets, each holding a foil card. Own --bn-*
+   scope, Kaizen charcoal/cream physical object (distinct from the device & printer). */
+.binder {
+  position:relative; width:100%; box-sizing:border-box;   /* transparent positioning wrapper — the SHEET is the object */
+  font-family:'Oswald',sans-serif;
+}
+
+/* THE SHEET — a translucent frosted-PP page of pockets sitting on the desk. This IS the
+   object now (no case, no rings): its own soft drop shadow, a subtle plastic edge. */
+.binder__page { position:relative; margin:0; padding:5px 0 0;   /* a few px above the pockets; the BOTTOM ends flush where the pockets end */
+  border-radius:9px 9px 0 0;
+  overflow-x:auto; overflow-y:visible;
+  scroll-snap-type:x proximity; scroll-padding-left:8px;
+  touch-action:pan-x; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; scroll-behavior:smooth;
+  background:linear-gradient(180deg, rgba(236,233,224,.66), rgba(222,219,208,.54));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.55),
+    inset 0 0 0 1px rgba(255,255,255,.35),        /* bright film edge */
+    0 12px 24px -10px rgba(40,34,18,.4); }        /* the sheet casts onto the desk */
+@supports (backdrop-filter: blur(1px)) {
+  .binder__page { backdrop-filter: saturate(1.05) blur(.5px); }   /* the ONLY backdrop-filter layer */
+}
+.binder__page::-webkit-scrollbar { display:none; height:0; }
+.binder__page { scrollbar-width:none; }
+.binder__row { display:flex; flex-direction:row; gap:0; perspective:1100px; align-items:flex-start;
+  padding:0 14px; min-width:100%; }       /* always span the bench → empty sleeves fill the rest */
+.binder__row.cards--flipping { overflow:visible; }
+/* its card is airborne (position:fixed, out of flow) — hold the sleeve open so the
+   bench doesn't collapse while the card flies out and rests above it */
+.pocket.bn-lent { min-height:225px; }
+
+/* POCKET — a LIGHT frosted-PP welded sleeve (light-on-light), card sealed inside.
+   Bright weld perimeter + a repeating vertical SEAM so neighbours share one welded line. */
+.pocket { position:relative; flex:0 0 auto; width:262px; padding:6px; border-radius:8px;
+  overflow:visible; scroll-snap-align:start;
+  background:linear-gradient(160deg, rgba(255,255,255,.26), rgba(255,255,255,.10));   /* frosted translucent interior */
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.5),        /* bright heat-weld, all 4 edges */
+    inset 0 0 0 1.5px rgba(40,34,20,.10),         /* hair dark cut line outside it */
+    inset -1px 0 0 rgba(255,255,255,.55),         /* RIGHT seam highlight ┐ continuous */
+    inset -2px 0 0 rgba(40,34,20,.18),            /* RIGHT seam shadow    ┘ welded line */
+    inset 1px 0 0 rgba(255,255,255,.35);          /* LEFT lip meets next pocket's seam */
+  content-visibility:auto; contain-intrinsic-size:262px 225px; }
+/* PP FILM over the card — NORMAL blend (a faint cloudy veil + ONE hero specular streak),
+   so you see the card THROUGH plastic. 74deg streak crosses the card's 118deg foil glare. */
+.pocket::before { content:""; position:absolute; inset:6px; border-radius:6px; z-index:5; pointer-events:none;
+  background:
+    linear-gradient(74deg, transparent 0 36%, rgba(255,255,255,.30) 44%, rgba(255,255,255,.42) 48%, rgba(255,255,255,.16) 53%, transparent 66%),
+    radial-gradient(120% 60% at 50% -12%, rgba(255,255,255,.22), transparent 60%),
+    rgba(255,255,255,.07);
+  -webkit-mask:radial-gradient(circle 12px at 78% 0, transparent 12px, #000 13px);
+          mask:radial-gradient(circle 12px at 78% 0, transparent 12px, #000 13px); }
+.pocket__ring { position:absolute; inset:4px; border-radius:7px; z-index:3; pointer-events:none;
+  background:rgba(255,255,255,.08);     /* glassy ring wash, visible on the light base */
+  -webkit-mask:radial-gradient(closest-side, transparent 70%, #000 86%); mask:radial-gradient(closest-side, transparent 70%, #000 86%); }
+.pocket__weld-b { position:absolute; left:6px; right:6px; bottom:5px; height:3px; z-index:4; pointer-events:none;
+  background:linear-gradient(rgba(255,255,255,.55), rgba(40,34,20,.18)); filter:blur(.4px); border-radius:2px; }
+.pocket__lip { position:absolute; left:6px; right:6px; top:5px; height:8px; z-index:6; pointer-events:none;
+  box-shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 2px 0 rgba(40,34,20,.12) inset;   /* bright open mouth */
+  -webkit-mask:radial-gradient(circle 11px at 78% -2px, transparent 11px, #000 12px); mask:radial-gradient(circle 11px at 78% -2px, transparent 11px, #000 12px); }
+
+/* EMPTY welded sleeve — IDENTICAL to an occupied pocket (same weld seams, lip, film,
+   interior) but with no card inside. Matches the occupied height so it's a real sleeve. */
+.pocket--empty { min-height:225px; }   /* same height as a card-filled pocket */
+.pocket--empty .card { display:none; }
+.pocket--add { cursor:pointer; }
+.pocket--add::after { content:"+"; position:absolute; inset:0; display:grid; place-items:center;
+  font:300 34px/1 "Oswald",sans-serif; color:rgba(40,34,20,.28); pointer-events:none; }
+
+/* edge-peek fades (overlays, NOT masks) */
+@media (prefers-reduced-motion: reduce) { .binder__page { scroll-behavior:auto; } }
+
+/* ═══════════ DETAILED REPORT overlay ═══════════ a long tape printing from the top of
+   the screen over everything, with side gaps. Uses the SAME paper tokens (--pr-paper,
+   --pr-print, VT323, scallop) as the quick receipt so the design language matches. */
+.pr-big {
+  --pr-paper:#efece1; --pr-print:#2b2a25; --pr-amber-d:#5c4326;   /* same paper tokens */
+  /* emerges from the printer's MOUTH (same as the quick receipt) and drapes down over the
+     screen. Fixed so it overlays everything and can fly down past the bottom on close.
+     `top` is the mouth's Y on the header (header sits at the page top). */
+  position:fixed; left:0; right:0; top:var(--mouth-y, 75px); z-index:200;
+  display:flex; flex-direction:column; align-items:center; pointer-events:none;
+}
+.pr-big[hidden]{ display:none; }
+/* the long paper tape itself — SAME responsive width as every other print, centered on the mouth */
+.pr-big-tape {
+  pointer-events:auto; width:var(--paper-w); margin:0 auto;
+  padding:26px 16px 18px; box-sizing:border-box;
+  background: var(--pr-paper);
+  font-family:"VT323", monospace; color:var(--pr-print); font-size:16px; line-height:1.3;
+  box-shadow: 0 22px 40px -12px rgba(30,26,16,.55), 0 0 0 1px rgba(0,0,0,.04);
+  /* faint print lines, identical recipe to the quick receipt */
+  background-image:
+    linear-gradient(var(--pr-paper),var(--pr-paper)),
+    repeating-linear-gradient(0deg, transparent 0 21px, rgba(0,0,0,.03) 21px 22px);
+  /* the SAME scalloped bottom edge as the receipt */
+  --pr-tooth:9px;
+  -webkit-mask: linear-gradient(#000,#000) no-repeat 0 0/100% calc(100% - 13px),
+                radial-gradient(var(--pr-tooth) at 50% 100%, transparent 98%, #000) repeat-x 0 100%/18px 18px;
+  mask: linear-gradient(#000,#000) no-repeat 0 0/100% calc(100% - 13px),
+        radial-gradient(var(--pr-tooth) at 50% 100%, transparent 98%, #000) repeat-x 0 100%/18px 18px;
+}
+/* the slot-lip feed shadow at the very top, same as the receipt's ::before */
+.pr-big-tape::before { content:""; position:absolute; left:0; right:0; top:0; height:22px; pointer-events:none;
+  background: linear-gradient(180deg, rgba(14,12,8,.5) 0%, rgba(14,12,8,.25) 45%, transparent 100%); }
+/* sub-rows (indented detail under a card) reuse pr-p-rec but dimmer/indented */
+.pr-p-rec.sub { font-size:13px; color:#7a766a; padding-left:8px; }
+
+/* spool-in: the tape prints downward from the top */
+@keyframes pr-big-in { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 0 0 0); } }
+.pr-big.printing .pr-big-tape { animation: pr-big-in .9s cubic-bezier(.2,.85,.3,1); }
+/* close: the whole report flies DOWN past the bottom and out of view */
+/* falls + drifts to a small RANDOM tilt (--fall-tilt set per-cut in JS), light paper */
+@keyframes pr-big-out {
+  from { transform: translateY(0) rotate(0deg); }
+  to   { transform: translateY(115vh) rotate(var(--fall-tilt, -3deg)); }
+}
+.pr-big.closing { animation: pr-big-out .65s cubic-bezier(.5,0,.75,.4) forwards; }
+/* when cut/closing, the tape's TOP edge also gets the scallop (both ends torn off) */
+.pr-big.closing .pr-big-tape {
+  -webkit-mask:
+    radial-gradient(var(--pr-tooth) at 50% 0%, transparent 98%, #000) repeat-x 0 0/18px 18px,
+    linear-gradient(#000,#000) no-repeat 0 13px/100% calc(100% - 26px),
+    radial-gradient(var(--pr-tooth) at 50% 100%, transparent 98%, #000) repeat-x 0 100%/18px 18px;
+  mask:
+    radial-gradient(var(--pr-tooth) at 50% 0%, transparent 98%, #000) repeat-x 0 0/18px 18px,
+    linear-gradient(#000,#000) no-repeat 0 13px/100% calc(100% - 26px),
+    radial-gradient(var(--pr-tooth) at 50% 100%, transparent 98%, #000) repeat-x 0 100%/18px 18px;
+}
+.pr-big.closing .pr-big-tape::before { opacity:0; }   /* free cut piece, no slot-lip shadow */
+
+/* on-tape control strip: PRINTED onto the same tape (one continuous paper). Just a
+   row of ink — a dashed section rule above it, then the paper buttons. */
+.pr-big-nav {
+  display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:12px 20px;
+  margin:14px 0 4px; padding-top:14px;
+  border-top:2px dashed #b3afa2;        /* a printed section rule above the controls */
+  color:var(--pr-print); font-family:"VT323",monospace; font-size:19px;
+}
+/* PAPER buttons — printed ink, a DASHED box around the label (like a tear-here / form
+   field on a receipt). Flat, no 3D. Hover/active just change the ink, not depth. */
+.pr-big-btn { font-family:"VT323",monospace; font-size:19px; letter-spacing:.05em;
+  color:var(--pr-print); background:transparent; cursor:pointer;
+  border:1.5px dashed var(--pr-print); border-radius:2px; padding:2px 14px;
+  transition: color .08s, border-color .08s, background .08s; }
+.pr-big-btn:hover { background:rgba(43,42,37,.06); }
+.pr-big-btn:active { background:rgba(43,42,37,.14); }
+.pr-big-btn:disabled { color:#b3afa2; border-color:#cfcabb; cursor:default; background:transparent; }
+/* CLOSE reads as the "cut here" action — printed in the amber ink, scissors glyph */
+.pr-big-btn.close { color:#9a5a1e; border-color:#9a5a1e; border-style:dashed; }
+.pr-big-btn.close:hover { background:rgba(154,90,30,.08); }
+.pr-big-pgind { font-size:18px; color:#7a766a; letter-spacing:.08em; min-width:48px; text-align:center; }
+</style>
+</head>
+<body>
+  <div class="scene">
+
+    <!-- ═══════════ PRINTER HEADER ═══════════ a full-width header bar above the timer.
+         It IS the cream DRP nameplate deck (badge + PRINT REPORT keys); the old feeder
+         mechanism (roll lid, exit bezel, tear bar, stub) is gone. The quick receipt feeds
+         DOWN from a slot along the header's bottom edge. Scoped .pr namespace. ═══════ -->
+    <div class="pr" id="printer">
+      <div class="pr-machine">
+        <!-- the cream DECK is now the whole header: model badge + PRINT control cluster -->
+        <div class="pr-deck">
+          <span class="pr-badge">DRP-12 <em>レポートプリンタ</em></span>
+          <span class="pr-controls">
+            <span class="pr-cluster">
+              <span class="pr-print-btn" id="printQuick" title="quick report">QUICK</span>
+              <span class="pr-print-btn alt" id="printDetailed" title="detailed report">DETAILED</span>
+              <span class="pr-power" title="power"></span>
+            </span>
+          </span>
+        </div>
+        <!-- the exit MOUTH: a slot along the header's bottom edge that the receipt feeds from -->
+        <div class="pr-exit">
+          <div class="pr-mouth"></div>
+          <div class="pr-tear"></div>
+          <div class="pr-stub"></div>
+        </div>
+      </div>
+
+      <!-- the receipt: the paper this printer feeds out (width matches the mouth) -->
+      <div class="pr-paper" id="receipt" hidden>
+        <div class="pr-p-head">
+          <div class="pr-p-title">TIMECARDS</div>
+          <div class="pr-p-sub">ACTIVITY REPORT ・ 活動記録</div>
+          <div class="pr-p-sub" id="quickStamp">2026-06-24  14:02</div>
+        </div>
+        <div class="pr-p-row"><span>TOTAL TRACKED</span><b>18h 41m</b></div>
+        <div class="pr-p-row"><span>SESSIONS</span><b>142</b></div>
+        <div class="pr-p-row"><span>ACTIVE DAYS</span><b>23</b></div>
+        <div class="pr-p-sec">
+          <div class="pr-p-lbl">LAST 14 DAYS</div>
+          <div class="pr-p-chart">
+            <i style="height:18%"></i><i style="height:42%"></i><i style="height:8%"></i><i style="height:60%"></i>
+            <i style="height:30%"></i><i style="height:0%"></i><i style="height:22%"></i><i style="height:50%"></i>
+            <i style="height:70%"></i><i style="height:12%"></i><i style="height:40%"></i><i style="height:55%"></i>
+            <i style="height:33%"></i><i class="hot" style="height:85%"></i>
+          </div>
+        </div>
+        <div class="pr-p-streak">CURRENT STREAK ・ 6 DAYS 🔥</div>
+        <div class="pr-p-row"><span>LONGEST</span><b>14 days</b></div>
+        <div class="pr-p-sec">
+          <div class="pr-p-lbl">BY CARD</div>
+          <div class="pr-p-bk"><span>Studying</span><u><i style="width:100%"></i></u><b>12h30</b></div>
+          <div class="pr-p-bk"><span>Writing</span><u><i style="width:33%"></i></u><b>04h12</b></div>
+          <div class="pr-p-bk"><span>Cooking</span><u><i style="width:13%"></i></u><b>01h38</b></div>
+        </div>
+        <div class="pr-p-sec">
+          <div class="pr-p-lbl">RECENT</div>
+          <div class="pr-p-rec"><span>Studying/Pomodoro</span><span>25:00</span></div>
+          <div class="pr-p-rec"><span>Writing/Stopwatch</span><span>41:18</span></div>
+          <div class="pr-p-rec"><span>Studying/Deep Work</span><span>50:00</span></div>
+        </div>
+        <div class="pr-p-code"></div>
+        <div class="pr-p-foot">THANK YOU ・ ありがとう</div>
+        <div class="pr-p-end">— ✂ — — — — — — — — — — — —</div>
+      </div>
+    </div>
+
+   <div class="scene-objects">
+
+    <!-- ───────── DEVICE ───────── -->
+    <div class="device running" id="device">
+      <span class="screw tl"></span><span class="screw tr"></span>
+      <span class="screw bl"></span><span class="screw br"></span>
+
+      <div class="faceplate">
+        <span class="brand">time<b>cards</b></span>
+        <span class="model jp">TC-580 ・ タイムカード</span>
+      </div>
+
+      <div class="lcd-bezel">
+        <div class="lcd">
+          <div class="lcd-top">
+            <span class="lcd-card jp">勉強 · Studying</span>
+            <span class="lcd-mode">COUNTDOWN <b>●</b></span>
+          </div>
+          <div class="readout">
+            <span class="ghost">88:88</span>
+            <span class="live">24:58</span>
+          </div>
+          <div class="lcd-sub live">▸ counting down</div>
+          <div class="lcd-ticks">
+            <span class="on">●RUN</span><span>○PAUSE</span><span>○DONE</span><span class="on">♪CHIME</span><span>🔒LOCK</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="side left">
+          <button class="skey">MODE<span class="jp">モード</span></button>
+          <button class="skey">RESET<span class="jp">リセット</span></button>
+        </div>
+        <div class="bigbtn-wrap">
+          <button class="bigbtn"><span class="glyph">❚❚</span></button>
+          <span class="bigbtn-label">START / STOP</span>
+        </div>
+        <div class="side right">
+          <button class="skey">STOP<span class="jp">ストップ</span></button>
+          <button class="skey">EJECT<span class="jp">イジェクト</span></button>
+        </div>
+      </div>
+
+      <!-- TIMER LIST: an instrument panel on the DEVICE (the slotted card's timers) -->
+      <div class="rack-area">
+        <div class="slot-label">TIMERS ・ タイマー <span class="rack-count">03 / 10</span></div>
+        <div class="rack" id="rack">
+          <button class="trow lit"><span class="t-led"></span><span class="t-name jp">Pomodoro</span><span class="t-cfg">⧖ 25:00</span></button>
+          <button class="trow"><span class="t-led"></span><span class="t-name jp">Deep Work</span><span class="t-cfg">⧖ 50:00</span></button>
+          <button class="trow"><span class="t-led"></span><span class="t-name jp">Quick Note</span><span class="t-cfg">⏱ STOPWATCH</span></button>
+          <button class="trow add">+ ADD TIMER</button>
+        </div>
+      </div>
+
+      <div class="footstamp">
+        <span>MADE IN JAPAN</span><span>2 × AAA</span><span>MODEL TC-08</span>
+      </div>
+
+      <!-- (the slotted-card visual was removed — dropping a card changes the device/LCD to
+           that card, but no card graphic is shown in this corner) -->
+    </div><!-- /device -->
+
+    <!-- (cards moved to the BINDER footer below; printer moved to the HEADER above) -->
+
+   </div><!-- /scene-objects -->
+
+   <!-- ═══════════ CARD BINDER ═══════════ a full-bench polypropylene binder page:
+        one horizontal scroll row of welded pockets, each holding a foil card. Own
+        --bn-* scope. The cards (moved from the old deck) live here now. ═══════ -->
+   <div class="binder">
+     <div class="binder__page">
+       <div class="binder__row cards">
+        <div class="pocket"><span class="pocket__ring"></span><span class="pocket__weld-b"></span><span class="pocket__lip"></span>
+        <!-- foil-prism · the holographic rainbow type -->
+        <div class="card writing foil-prism" data-name="Writing" data-cat="#4f6f8f" data-no="012">
+         <div class="card-3d">
+          <div class="card-face front">
+            <span class="foil"></span>
+            <div class="card-rank">
+              <span class="rarity">★★☆</span>
+              <span class="card-series">SER.01</span>
+              <span class="card-no"><span class="l">No.</span><span class="n">012</span></span>
+            </div>
+            <div class="card-art">
+              <div class="card-emblem">✎</div>
+              <div class="card-id">
+                <div class="card-name jp">Writing</div>
+                <div class="card-cat">Hobby</div>
+              </div>
+            </div>
+            <div class="card-foot">
+              <div class="card-timers"><span class="tdot">⏱ SW</span><span class="tdot">⧖ 25m</span></div>
+              <span class="card-total">04:12:30</span>
+            </div>
+            <div class="barcode"></div>
+          </div>
+          <!-- BACK: matte documentary reverse (Bikkuriman idiom), card-specific stats -->
+          <div class="card-back">
+            <div class="cb-id"><span>SER.01 ・ No.012</span><span class="cb-rank">★★☆</span></div>
+            <div class="cb-name-row">
+              <div class="cb-name">Writing</div>
+              <span class="cb-seal">ANGEL</span>
+            </div>
+            <div class="cb-ledger">
+              <div class="cb-row"><span>TOTAL</span><i></i><b>04:12:30</b></div>
+              <div class="cb-row"><span>SESSIONS</span><i></i><b>38</b></div>
+              <div class="cb-row"><span>LONGEST</span><i></i><b>1:02:10</b></div>
+              <div class="cb-row"><span>SINCE</span><i></i><b>2026-05-09</b></div>
+              <div class="cb-rule"></div>
+              <div class="cb-roster">
+                <div class="cb-trow"><span>▲ Free Write</span><i></i><b>2:48:12</b></div>
+                <div class="cb-trow"><span>▼ Sprint 25</span><i></i><b>1:24:18</b></div>
+              </div>
+            </div>
+            <div class="cb-foot">
+              <div class="cb-tick"></div>
+              <div class="cb-reg"><span>© TIMECARDS ・ MADE IN JAPAN</span><span class="cb-chop">✓</span></div>
+            </div>
+          </div>
+         </div>
+        </div>
+        </div><!-- /pocket -->
+
+        <div class="pocket"><span class="pocket__ring"></span><span class="pocket__weld-b"></span><span class="pocket__lip"></span>
+        <!-- foil-gold · prismatic gold leaf -->
+        <div class="card cooking foil-gold" data-name="Cooking" data-cat="#b8702f" data-no="013">
+         <div class="card-3d">
+          <div class="card-face front">
+            <span class="foil"></span>
+            <div class="card-rank">
+              <span class="rarity">★☆☆</span>
+              <span class="card-series">SER.01</span>
+              <span class="card-no"><span class="l">No.</span><span class="n">013</span></span>
+            </div>
+            <div class="card-art">
+              <div class="card-emblem">🍳</div>
+              <div class="card-id">
+                <div class="card-name jp">Cooking</div>
+                <div class="card-cat">Home</div>
+              </div>
+            </div>
+            <div class="card-foot">
+              <div class="card-timers"><span class="tdot">⧖ 45m</span></div>
+              <span class="card-total">01:38:00</span>
+            </div>
+            <div class="barcode"></div>
+          </div>
+          <div class="card-back">
+            <div class="cb-id"><span>SER.01 ・ No.013</span><span class="cb-rank">★☆☆</span></div>
+            <div class="cb-name-row">
+              <div class="cb-name">Cooking</div>
+              <span class="cb-seal">GUARD</span>
+            </div>
+            <div class="cb-ledger">
+              <div class="cb-row"><span>TOTAL</span><i></i><b>01:38:00</b></div>
+              <div class="cb-row"><span>SESSIONS</span><i></i><b>12</b></div>
+              <div class="cb-row"><span>LONGEST</span><i></i><b>0:45:00</b></div>
+              <div class="cb-row"><span>SINCE</span><i></i><b>2026-05-28</b></div>
+              <div class="cb-rule"></div>
+              <div class="cb-roster">
+                <div class="cb-trow"><span>▼ Meal Timer</span><i></i><b>1:38:00</b></div>
+              </div>
+            </div>
+            <div class="cb-foot">
+              <div class="cb-tick"></div>
+              <div class="cb-reg"><span>© TIMECARDS ・ MADE IN JAPAN</span><span class="cb-chop">✓</span></div>
+            </div>
+          </div>
+         </div>
+        </div>
+        </div><!-- /pocket -->
+
+        <div class="pocket"><span class="pocket__ring"></span><span class="pocket__weld-b"></span><span class="pocket__lip"></span>
+        <!-- foil-holo · full-spectrum conic prism -->
+        <div class="card workout foil-holo" data-name="Studying" data-cat="#6f8f4f" data-no="014">
+         <div class="card-3d">
+          <div class="card-face front">
+            <span class="foil"></span>
+            <div class="card-rank">
+              <span class="rarity">★★☆</span>
+              <span class="card-series">SER.01</span>
+              <span class="card-no"><span class="l">No.</span><span class="n">014</span></span>
+            </div>
+            <div class="card-art">
+              <div class="card-emblem">⚡</div>
+              <div class="card-id">
+                <div class="card-name jp">Studying</div>
+                <div class="card-cat">Focus ・ 🔥 day 6</div>
+              </div>
+            </div>
+            <div class="card-foot">
+              <div class="card-timers"><span class="tdot">⧖ 25m</span><span class="tdot">⧖ 50m</span><span class="tdot">⏱ SW</span></div>
+              <span class="card-total">12:30:18</span>
+            </div>
+            <div class="barcode"></div>
+          </div>
+          <div class="card-back">
+            <div class="cb-id"><span>SER.01 ・ No.014</span><span class="cb-rank">★★☆</span></div>
+            <div class="cb-name-row">
+              <div class="cb-name">Studying</div>
+              <span class="cb-seal">ANGEL</span>
+            </div>
+            <div class="cb-ledger">
+              <div class="cb-row"><span>TOTAL</span><i></i><b>12:30:18</b></div>
+              <div class="cb-row"><span>SESSIONS</span><i></i><b>92</b></div>
+              <div class="cb-row"><span>LONGEST</span><i></i><b>1:50:00</b></div>
+              <div class="cb-row"><span>STREAK</span><i></i><b>DAY 6 🔥</b></div>
+              <div class="cb-row"><span>SINCE</span><i></i><b>2026-05-01</b></div>
+              <div class="cb-rule"></div>
+              <div class="cb-roster">
+                <div class="cb-trow"><span>▼ Pomodoro</span><i></i><b>6:50:00</b></div>
+                <div class="cb-trow"><span>▼ Deep Work</span><i></i><b>4:20:18</b></div>
+                <div class="cb-trow"><span>▲ Quick Note</span><i></i><b>1:20:00</b></div>
+              </div>
+            </div>
+            <div class="cb-foot">
+              <div class="cb-tick"></div>
+              <div class="cb-reg"><span>© TIMECARDS ・ MADE IN JAPAN</span><span class="cb-chop">✓</span></div>
+            </div>
+          </div>
+         </div>
+        </div>
+        </div><!-- /pocket -->
+
+        <div class="pocket"><span class="pocket__ring"></span><span class="pocket__weld-b"></span><span class="pocket__lip"></span>
+        <!-- foil-violet · magenta-to-blue prism band -->
+        <div class="card reading foil-violet" data-name="Reading" data-cat="#7a5c9e" data-no="015">
+         <div class="card-3d">
+          <div class="card-face front">
+            <span class="foil"></span>
+            <div class="card-rank">
+              <span class="rarity">★☆☆</span>
+              <span class="card-series">SER.01</span>
+              <span class="card-no"><span class="l">No.</span><span class="n">015</span></span>
+            </div>
+            <div class="card-art">
+              <div class="card-emblem">📖</div>
+              <div class="card-id">
+                <div class="card-name jp">Reading</div>
+                <div class="card-cat">Mind</div>
+              </div>
+            </div>
+            <div class="card-foot">
+              <div class="card-timers"><span class="tdot">⏱ SW</span></div>
+              <span class="card-total">06:14:40</span>
+            </div>
+            <div class="barcode"></div>
+          </div>
+          <div class="card-back">
+            <div class="cb-id"><span>SER.01 ・ No.015</span><span class="cb-rank">★☆☆</span></div>
+            <div class="cb-name-row">
+              <div class="cb-name">Reading</div>
+              <span class="cb-seal">GUARD</span>
+            </div>
+            <div class="cb-ledger">
+              <div class="cb-row"><span>TOTAL</span><i></i><b>06:14:40</b></div>
+              <div class="cb-row"><span>SESSIONS</span><i></i><b>41</b></div>
+              <div class="cb-row"><span>LONGEST</span><i></i><b>1:12:00</b></div>
+              <div class="cb-row"><span>SINCE</span><i></i><b>2026-04-22</b></div>
+              <div class="cb-rule"></div>
+              <div class="cb-roster">
+                <div class="cb-trow"><span>▲ Free Read</span><i></i><b>6:14:40</b></div>
+              </div>
+            </div>
+            <div class="cb-foot">
+              <div class="cb-tick"></div>
+              <div class="cb-reg"><span>© TIMECARDS ・ MADE IN JAPAN</span><span class="cb-chop">✓</span></div>
+            </div>
+          </div>
+         </div>
+        </div>
+        </div><!-- /pocket -->
+
+        <div class="pocket"><span class="pocket__ring"></span><span class="pocket__weld-b"></span><span class="pocket__lip"></span>
+        <!-- foil-emerald · cool teal/green sweep -->
+        <div class="card exercise foil-emerald" data-name="Exercise" data-cat="#b8513f" data-no="016">
+         <div class="card-3d">
+          <div class="card-face front">
+            <span class="foil"></span>
+            <div class="card-rank">
+              <span class="rarity">★★☆</span>
+              <span class="card-series">SER.01</span>
+              <span class="card-no"><span class="l">No.</span><span class="n">016</span></span>
+            </div>
+            <div class="card-art">
+              <div class="card-emblem">🏃</div>
+              <div class="card-id">
+                <div class="card-name jp">Exercise</div>
+                <div class="card-cat">Body</div>
+              </div>
+            </div>
+            <div class="card-foot">
+              <div class="card-timers"><span class="tdot">⧖ 30m</span><span class="tdot">⏱ SW</span></div>
+              <span class="card-total">08:45:20</span>
+            </div>
+            <div class="barcode"></div>
+          </div>
+          <div class="card-back">
+            <div class="cb-id"><span>SER.01 ・ No.016</span><span class="cb-rank">★★☆</span></div>
+            <div class="cb-name-row">
+              <div class="cb-name">Exercise</div>
+              <span class="cb-seal">ANGEL</span>
+            </div>
+            <div class="cb-ledger">
+              <div class="cb-row"><span>TOTAL</span><i></i><b>08:45:20</b></div>
+              <div class="cb-row"><span>SESSIONS</span><i></i><b>57</b></div>
+              <div class="cb-row"><span>LONGEST</span><i></i><b>0:58:00</b></div>
+              <div class="cb-row"><span>SINCE</span><i></i><b>2026-03-30</b></div>
+              <div class="cb-rule"></div>
+              <div class="cb-roster">
+                <div class="cb-trow"><span>▼ HIIT</span><i></i><b>3:30:00</b></div>
+                <div class="cb-trow"><span>▲ Run</span><i></i><b>5:15:20</b></div>
+              </div>
+            </div>
+            <div class="cb-foot">
+              <div class="cb-tick"></div>
+              <div class="cb-reg"><span>© TIMECARDS ・ MADE IN JAPAN</span><span class="cb-chop">✓</span></div>
+            </div>
+          </div>
+         </div>
+        </div>
+        </div><!-- /pocket -->
+
+        <div class="pocket"><span class="pocket__ring"></span><span class="pocket__weld-b"></span><span class="pocket__lip"></span>
+        <!-- foil-gold · prismatic gold leaf -->
+        <div class="card music foil-gold" data-name="Practice" data-cat="#3f8f8a" data-no="017">
+         <div class="card-3d">
+          <div class="card-face front">
+            <span class="foil"></span>
+            <div class="card-rank">
+              <span class="rarity">★☆☆</span>
+              <span class="card-series">SER.01</span>
+              <span class="card-no"><span class="l">No.</span><span class="n">017</span></span>
+            </div>
+            <div class="card-art">
+              <div class="card-emblem">🎸</div>
+              <div class="card-id">
+                <div class="card-name jp">Practice</div>
+                <div class="card-cat">Craft</div>
+              </div>
+            </div>
+            <div class="card-foot">
+              <div class="card-timers"><span class="tdot">⏱ SW</span></div>
+              <span class="card-total">03:20:05</span>
+            </div>
+            <div class="barcode"></div>
+          </div>
+          <div class="card-back">
+            <div class="cb-id"><span>SER.01 ・ No.017</span><span class="cb-rank">★☆☆</span></div>
+            <div class="cb-name-row">
+              <div class="cb-name">Practice</div>
+              <span class="cb-seal">GUARD</span>
+            </div>
+            <div class="cb-ledger">
+              <div class="cb-row"><span>TOTAL</span><i></i><b>03:20:05</b></div>
+              <div class="cb-row"><span>SESSIONS</span><i></i><b>26</b></div>
+              <div class="cb-row"><span>LONGEST</span><i></i><b>0:40:00</b></div>
+              <div class="cb-row"><span>SINCE</span><i></i><b>2026-05-14</b></div>
+              <div class="cb-rule"></div>
+              <div class="cb-roster">
+                <div class="cb-trow"><span>▲ Scales</span><i></i><b>1:10:05</b></div>
+                <div class="cb-trow"><span>▼ Songs</span><i></i><b>2:10:00</b></div>
+              </div>
+            </div>
+            <div class="cb-foot">
+              <div class="cb-tick"></div>
+              <div class="cb-reg"><span>© TIMECARDS ・ MADE IN JAPAN</span><span class="cb-chop">✓</span></div>
+            </div>
+          </div>
+         </div>
+        </div>
+        </div><!-- /pocket -->
+       </div>
+     </div>
+   </div><!-- /binder -->
+
+  </div>
+
+  <!-- ═══════════ DETAILED REPORT ═══════════ a long tape that prints from the top of
+       the whole screen, over everything, with side gaps. SAME paper design language as
+       the quick receipt (--pr-paper, VT323, scallop edge). Paged + closeable. ═══════ -->
+  <div class="pr-big" id="bigReport" hidden>
+    <div class="pr-big-tape">
+      <!-- the printed report body: same pr-p-* styling as the quick receipt -->
+      <div class="pr-p-head">
+        <div class="pr-p-title">TIMECARDS</div>
+        <div class="pr-p-sub">DETAILED REPORT ・ 詳細活動記録</div>
+        <div class="pr-p-sub"><span id="bigStamp">2026-06-24  14:02</span> ・ PAGE <span id="bigPageNo">1</span>/4</div>
+      </div>
+
+      <!-- PAGE 1 — OVERVIEW -->
+      <section class="pr-big-pg" data-pg="1">
+        <div class="pr-p-sec">
+          <div class="pr-p-lbl">OVERVIEW ・ 概要</div>
+          <div class="pr-p-row"><span>TOTAL TRACKED</span><b>18h 41m</b></div>
+          <div class="pr-p-row"><span>SESSIONS</span><b>142</b></div>
+          <div class="pr-p-row"><span>ACTIVE DAYS</span><b>23</b></div>
+          <div class="pr-p-row"><span>AVG / DAY</span><b>48m</b></div>
+          <div class="pr-p-row"><span>CARDS</span><b>3</b></div>
+          <div class="pr-p-row"><span>TIMERS</span><b>7</b></div>
+        </div>
+        <div class="pr-p-sec">
+          <div class="pr-p-lbl">LAST 14 DAYS</div>
+          <div class="pr-p-chart">
+            <i style="height:40%"></i><i style="height:62%"></i><i style="height:30%"></i><i style="height:78%"></i>
+            <i style="height:55%"></i><i style="height:90%"></i><i style="height:48%"></i><i style="height:66%"></i>
+            <i style="height:25%"></i><i style="height:70%"></i><i style="height:52%"></i><i style="height:38%"></i>
+            <i style="height:33%"></i><i class="hot" style="height:85%"></i>
+          </div>
+        </div>
+        <div class="pr-p-streak">CURRENT STREAK ・ 6 DAYS 🔥</div>
+      </section>
+
+      <!-- PAGE 2 — PER-CARD BREAKDOWN -->
+      <section class="pr-big-pg" data-pg="2" hidden>
+        <div class="pr-p-sec">
+          <div class="pr-p-lbl">BY CARD ・ カード別</div>
+          <div class="pr-p-bk"><span>Studying</span><u><i style="width:100%"></i></u><b>12h30</b></div>
+          <div class="pr-p-rec sub"><span>・ Pomodoro ⧖25</span><span>8h10 ・ 52×</span></div>
+          <div class="pr-p-rec sub"><span>・ Deep Work ⧖50</span><span>3h20 ・ 9×</span></div>
+          <div class="pr-p-rec sub"><span>・ Quick Note ⏱</span><span>1h00 ・ 14×</span></div>
+          <div class="pr-p-bk"><span>Writing</span><u><i style="width:33%"></i></u><b>04h12</b></div>
+          <div class="pr-p-rec sub"><span>・ Stopwatch ⏱</span><span>3h02 ・ 21×</span></div>
+          <div class="pr-p-rec sub"><span>・ Sprint ⧖15</span><span>1h10 ・ 18×</span></div>
+          <div class="pr-p-bk"><span>Cooking</span><u><i style="width:13%"></i></u><b>01h38</b></div>
+          <div class="pr-p-rec sub"><span>・ Timer ⧖30</span><span>1h38 ・ 12×</span></div>
+        </div>
+      </section>
+
+      <!-- PAGE 3 — SESSION LOG -->
+      <section class="pr-big-pg" data-pg="3" hidden>
+        <div class="pr-p-sec">
+          <div class="pr-p-lbl">SESSION LOG ・ 履歴</div>
+          <div class="pr-p-rec"><span>06-24 09:12 Studying/Pomodoro</span><span>25:00</span></div>
+          <div class="pr-p-rec"><span>06-24 08:40 Writing/Stopwatch</span><span>41:18</span></div>
+          <div class="pr-p-rec"><span>06-23 21:05 Studying/Deep Work</span><span>50:00</span></div>
+          <div class="pr-p-rec"><span>06-23 18:30 Cooking/Timer</span><span>30:00</span></div>
+          <div class="pr-p-rec"><span>06-23 14:02 Studying/Pomodoro</span><span>25:00</span></div>
+          <div class="pr-p-rec"><span>06-23 10:15 Writing/Sprint</span><span>15:00</span></div>
+          <div class="pr-p-rec"><span>06-22 20:48 Studying/Pomodoro</span><span>25:00</span></div>
+          <div class="pr-p-rec"><span>06-22 16:33 Studying/Deep Work</span><span>50:00</span></div>
+          <div class="pr-p-rec"><span>06-22 11:20 Cooking/Timer</span><span>30:00</span></div>
+          <div class="pr-p-rec"><span>06-21 19:07 Writing/Stopwatch</span><span>38:42</span></div>
+        </div>
+      </section>
+
+      <!-- PAGE 4 — RECORDS & MILESTONES -->
+      <section class="pr-big-pg" data-pg="4" hidden>
+        <div class="pr-p-sec">
+          <div class="pr-p-lbl">RECORDS ・ 記録</div>
+          <div class="pr-p-row"><span>LONGEST SESSION</span><b>1h50m</b></div>
+          <div class="pr-p-row"><span>LONGEST STREAK</span><b>14 days</b></div>
+          <div class="pr-p-row"><span>MOST ACTIVE DAY</span><b>Jun 18 ・ 3h40</b></div>
+          <div class="pr-p-row"><span>BUSIEST HOUR</span><b>09:00–10:00</b></div>
+          <div class="pr-p-row"><span>FIRST SESSION</span><b>May 01</b></div>
+        </div>
+        <div class="pr-p-sec">
+          <div class="pr-p-lbl">MILESTONES ・ 達成</div>
+          <div class="pr-p-rec"><span>★ 100 sessions</span><span>Jun 12</span></div>
+          <div class="pr-p-rec"><span>★ 15h total</span><span>Jun 19</span></div>
+          <div class="pr-p-rec"><span>☆ 25h total</span><span>— locked</span></div>
+        </div>
+        <div class="pr-p-code"></div>
+        <div class="pr-p-foot">THANK YOU ・ ありがとう</div>
+      </section>
+
+      <!-- the control strip is PRINTED on the same tape (one continuous paper) -->
+      <div class="pr-big-nav">
+        <button class="pr-big-btn" id="bigPrev" title="previous page">◂ PREV</button>
+        <span class="pr-big-pgind"><span id="bigPageInd">1</span> / 4</span>
+        <button class="pr-big-btn" id="bigNext" title="next page">NEXT ▸</button>
+        <button class="pr-big-btn close" id="bigClose" title="close ・ tear off">✂ CLOSE</button>
+      </div>
+
+      <div class="pr-p-end">— ✂ — — — — — — — — — — — — — — — — — —</div>
+    </div>
+  </div>
+
+<script>
+// ── synthesized gadget sounds (no audio files; WebAudio, like the real alarm) ──
+let actx;
+const ac = () => (actx ||= new (window.AudioContext || window.webkitAudioContext)());
+function tone(freq, dur, type = "square", gain = 0.18, slideTo) {
+  const c = ac(), t = c.currentTime, o = c.createOscillator(), g = c.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+  g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(c.destination); o.start(t); o.stop(t + dur + 0.02);
+}
+function noiseClick(dur = 0.03, gain = 0.25) {
+  const c = ac(), n = c.createBufferSource(), buf = c.createBuffer(1, c.sampleRate * dur, c.sampleRate);
+  const d = buf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+  n.buffer = buf; const g = c.createGain(); g.gain.value = gain;
+  const f = c.createBiquadFilter(); f.type = "highpass"; f.frequency.value = 1400;
+  n.connect(f).connect(g).connect(c.destination); n.start();
+}
+const sndClick = () => { noiseClick(0.025, 0.22); tone(220, 0.04, "square", 0.12); };          // button/key press
+const sndThunk = () => { tone(150, 0.16, "sine", 0.3, 60); noiseClick(0.04, 0.15); };           // card insert
+const sndTick  = () => tone(1200, 0.015, "square", 0.08);                                       // small ui tick
+const sndEject = () => tone(90, 0.2, "sine", 0.25, 200);                                        // card eject
+// card FLIP — a short PAPER (not glass) turn: a low THOCK + a swept-noise WHOOSH + a
+// settle SNAP. Quieter than clicks. (heavy: optional lower thunk; unused now.)
+function sndFlip(heavy = false) {
+  const c = ac(), t = c.currentTime;
+  const j = (1 + (Math.random()*0.16 - 0.08));   // ±8% jitter
+  // (1) THOCK — body peeling off the stack
+  tone(heavy ? 80*j : 95*j, 0.05, "sine", 0.09);
+  // (2) WHOOSH — bandpass-swept white noise tracking the rotateY
+  const n = c.createBufferSource(), dur = 0.12*j;
+  const buf = c.createBuffer(1, c.sampleRate*dur, c.sampleRate);
+  const d = buf.getChannelData(0); for (let i=0;i<d.length;i++) d[i] = (Math.random()*2-1);
+  n.buffer = buf;
+  const bp = c.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = 0.8;
+  bp.frequency.setValueAtTime(700, t); bp.frequency.exponentialRampToValueAtTime(2800, t+0.09);
+  const g = c.createGain(); g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.16, t+0.006); g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+  const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 6000;   // keep it papery
+  n.connect(bp).connect(g).connect(lp).connect(c.destination); n.start(t); n.stop(t+dur+0.02);
+  // (3) SNAP — the face landing flat, scheduled near the visual settle
+  setTimeout(() => { noiseClick(0.012, 0.13); tone(3100*j, 0.015, "sine", 0.08); }, 300);
+}
+
+// ── big button: press travel + click sound + toggle run state ──
+const device = document.querySelector(".device");
+const bigbtn = document.querySelector(".bigbtn");
+const glyph = bigbtn.querySelector(".glyph");
+bigbtn.addEventListener("click", () => {
+  if (device.classList.contains("ejected")) { sndClick(); return; }   // empty: no card → big button does nothing
+  sndClick();
+  const running = device.classList.toggle("running");
+  glyph.textContent = running ? "❚❚" : "▶";
+  // direction follows the ACTIVE timer's type, not a hardcoded "down"
+  const active = rack.querySelector(".trow.lit");
+  setSubDirection(active ? isStopwatch(active) : false, running);
+});
+
+// ── PRINT REPORT: the printer (a separate object) spools a receipt ──
+const printer = document.getElementById("printer");
+const receipt = document.getElementById("receipt");
+// Every print (quick + detailed) emerges AT the mouth. The mouth's Y shifts whenever the
+// header height changes (e.g. a bigger control cluster), so measure it and publish --mouth-y
+// for the paper anchors — no magic number to go stale. (.pr is pinned to the page top, so
+// the mouth's offset within .pr equals its viewport Y, which the fixed detailed report needs.)
+function syncMouthY() {
+  const mouth = document.querySelector(".pr-mouth"), pr = document.querySelector(".pr");
+  if (!mouth || !pr) return;
+  const y = mouth.getBoundingClientRect().top - pr.getBoundingClientRect().top;
+  document.documentElement.style.setProperty("--mouth-y", y + "px");
+}
+syncMouthY();
+window.addEventListener("resize", syncMouthY);
+function sndPrint() { // dot-matrix printer chatter
+  let t = 0; const iv = setInterval(() => { tone(900 + Math.random()*400, 0.02, "square", 0.06); noiseClick(0.012, 0.08); if (++t > 16) clearInterval(iv); }, 38);
+}
+function sndCut() {  // the "tear off / cut" sound (shared by both reports)
+  noiseClick(0.06, 0.28); tone(2600, 0.05, "sawtooth", 0.12, 600); noiseClick(0.05, 0.2);
+}
+const stub = printer.querySelector(".pr-stub");
+let quickShown = false;   // is a quick receipt currently out of the slot?
+let quickBusy = false;    // animation in flight (ignore presses)
+
+// Prints pull data from the (dynamic) app and FREEZE it onto the paper. In this mock
+// the proof of that is the timestamp: each printout stamps the real print moment, so a
+// printed report is a snapshot — reprinting later gives a new time.
+function nowStamp() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}  ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function printQuickReport() {
+  quickBusy = true;
+  // freeze the app's data onto the paper at THIS moment (here: the print timestamp)
+  document.getElementById("quickStamp").textContent = nowStamp();
+  // the stub BECOMES the receipt: hide it for the WHOLE time the receipt is out
+  // (quick-out persists past the print animation, unlike the transient 'printing').
+  printer.classList.add("printing", "quick-out");
+  receipt.hidden = false;
+  receipt.classList.remove("cut");
+  receipt.classList.remove("spooling"); void receipt.offsetWidth; receipt.classList.add("spooling");
+  sndPrint();
+  setTimeout(() => { printer.classList.remove("printing"); quickShown = true; quickBusy = false; }, 750);
+}
+function randTilt() {  // a small random tilt for a cut sheet — light paper, ±2°..±6°
+  const deg = 2 + Math.random() * 4;
+  return (Math.random() < 0.5 ? -deg : deg).toFixed(2) + "deg";
+}
+// SHARED across every report: once the cut paper is gone, the mouth feeds a fresh leading
+// tongue (the stub) back out to the at-rest READY position. `quick-out` hid the stub the
+// whole time any paper was out; removing it + the feed animation restores the ready state.
+// `done` is called when the feed finishes (each report clears its own busy flag there).
+function feedStubBack(done) {
+  printer.classList.remove("quick-out");
+  stub.classList.remove("feeding"); void stub.offsetWidth; stub.classList.add("feeding");
+  sndPrint();
+  stub.addEventListener("animationend", () => { stub.classList.remove("feeding"); done && done(); }, { once: true });
+}
+function cutQuickReport() {
+  quickBusy = true;
+  sndCut();
+  // the receipt tears off (top scallop) and drifts away with a small random tilt
+  receipt.style.setProperty("--fall-tilt", randTilt());
+  receipt.classList.remove("spooling");
+  receipt.classList.add("cut");
+  receipt.addEventListener("animationend", () => {
+    receipt.hidden = true;
+    receipt.classList.remove("cut", "spooling");
+    quickShown = false;
+    feedStubBack(() => { quickBusy = false; });   // mouth feeds stub → ready
+  }, { once: true });
+}
+document.getElementById("printQuick").addEventListener("click", () => pressPrintButton("quick"));
+
+// ── DETAILED report: a long paged tape printing over the whole screen ──
+const bigReport = document.getElementById("bigReport");
+const bigPages = [...bigReport.querySelectorAll(".pr-big-pg")];
+const bigPrev = document.getElementById("bigPrev");
+const bigNext = document.getElementById("bigNext");
+let bigPage = 1;
+function showBigPage(n) {
+  bigPage = Math.max(1, Math.min(bigPages.length, n));
+  bigPages.forEach(p => p.hidden = (+p.dataset.pg !== bigPage));
+  document.getElementById("bigPageNo").textContent = bigPage;
+  document.getElementById("bigPageInd").textContent = bigPage;
+  bigPrev.disabled = bigPage === 1;
+  bigNext.disabled = bigPage === bigPages.length;
+}
+let bigShown = false, bigBusy = false;
+function openDetailed() {
+  bigBusy = true;
+  // freeze the app's data onto the paper at THIS moment (here: the print timestamp)
+  document.getElementById("bigStamp").textContent = nowStamp();
+  // SAME process as the quick report: it shares the one mouth + paper path, so hide the
+  // at-rest stub (`quick-out`) while this paper is out, and light the lamp.
+  printer.classList.add("lamp-on", "quick-out");
+  bigReport.hidden = false;
+  bigReport.classList.remove("closing");
+  showBigPage(1);
+  bigReport.classList.remove("printing"); void bigReport.offsetWidth; bigReport.classList.add("printing");
+  sndPrint();
+  setTimeout(() => { printer.classList.remove("lamp-on"); bigReport.classList.remove("printing"); bigShown = true; bigBusy = false; }, 950);
+}
+function closeDetailed() {
+  bigBusy = true;
+  sndCut();
+  bigReport.style.setProperty("--fall-tilt", randTilt());
+  bigReport.classList.add("closing");   // tears off (top scallop) + drifts down with a small tilt
+  bigReport.addEventListener("animationend", () => {
+    bigReport.hidden = true;
+    bigReport.classList.remove("closing");
+    bigShown = false;
+    feedStubBack(() => { bigBusy = false; });   // mouth feeds stub → ready (SAME as quick)
+  }, { once: true });
+}
+document.getElementById("printDetailed").addEventListener("click", () => pressPrintButton("detailed"));
+
+// ONLY ONE printed paper out of the header at a time. Pressing EITHER print button:
+//  • if a paper is already out (quick OR detailed) → CUT it (whichever it is), ignoring
+//    which button was pressed — you never get a second paper from the one mouth.
+//  • otherwise → print the paper for the button that was pressed.
+// A single busy guard covers both papers' animations.
+function pressPrintButton(which) {
+  sndClick();
+  if (quickBusy || bigBusy) return;          // mid print/cut/feed — ignore
+  if (quickShown) { cutQuickReport(); return; }   // quick receipt is out → cut it
+  if (bigShown)   { closeDetailed();  return; }    // detailed report is out → cut it
+  // nothing out → print the pressed button's paper
+  which === "detailed" ? openDetailed() : printQuickReport();
+}
+bigPrev.addEventListener("click", () => { sndTick(); showBigPage(bigPage - 1); });
+bigNext.addEventListener("click", () => { sndTick(); showBigPage(bigPage + 1); });
+document.getElementById("bigClose").addEventListener("click", closeDetailed);
+
+// ── side keys + timer rows: click feedback ──
+document.querySelectorAll(".skey").forEach(b => b.addEventListener("click", sndClick));
+const rack = document.getElementById("rack");
+
+// A timer is either a STOPWATCH (counts UP from 0) or a COUNTDOWN (counts DOWN from its
+// preset). The active timer's type drives EVERY part of the readout — mode, direction text,
+// and the starting time — so the screen always tells the truth about which way time flows.
+const lcdMode  = document.querySelector(".lcd-mode");
+const lcdSub   = document.querySelector(".lcd-sub");
+const lcdTime  = document.querySelector(".readout .live");
+const lcdGhost = document.querySelector(".readout .ghost");
+function isStopwatch(row) { return (row.querySelector(".t-cfg")?.textContent || "").includes("STOPWATCH"); }
+function cfgTime(row) {  // the preset "MM:SS" from a countdown row's config (e.g. "⧖ 25:00")
+  const m = (row.querySelector(".t-cfg")?.textContent || "").match(/(\d{1,2}:\d{2})/);
+  return m ? m[1] : "00:00";
+}
+function applyTimerDisplay(row) {
+  const sw = isStopwatch(row);
+  lcdMode.innerHTML = sw ? "STOPWATCH <b>▲</b>" : "COUNTDOWN <b>▼</b>";
+  // A stopwatch (engine 'up' mode) counts UP from 0 at the engine's full resolution —
+  // hundredths of a second (MM:SS.cc). A countdown ('down') shows its preset MM:SS and
+  // ticks toward 0. The all-segments ghost behind the digits matches each format.
+  if (sw) { lcdTime.textContent = "00:00.00"; lcdGhost.textContent = "88:88.88"; }
+  else    { lcdTime.textContent = cfgTime(row); lcdGhost.textContent = "88:88"; }
+  setSubDirection(sw, device.classList.contains("running"));
+}
+function setSubDirection(sw, running) {
+  if (!running) { lcdSub.textContent = "❚❚ paused"; lcdSub.classList.remove("live"); return; }
+  lcdSub.textContent = sw ? "▴ counting up" : "▾ counting down";
+  lcdSub.classList.add("live");
+}
+
+rack.addEventListener("click", e => {
+  const row = e.target.closest(".trow");
+  if (!row || row.classList.contains("add")) { if (row) sndClick(); return; }
+  sndTick();
+  rack.querySelectorAll(".trow").forEach(r => r.classList.remove("lit"));
+  row.classList.add("lit");
+  applyTimerDisplay(row);   // the whole readout follows the selected timer's type
+});
+// initialise the readout from whichever timer is lit at load (so direction/mode/time are
+// driven by the timer's type, never stale markup)
+{ const lit = rack.querySelector(".trow.lit"); if (lit) applyTimerDisplay(lit); }
+
+// ── drag a card onto the timer to change the device to that card ──
+const lcd = document.querySelector(".lcd");
+let dragData = null;
+
+const cardsCol = document.querySelector(".binder__row");   // the cards now live in the binder row
+const binderEl = document.querySelector(".binder");
+const binderPage = document.querySelector(".binder__page");
+// One physical gesture, in three beats. To the BACK: (1) the card LIFTS up out of its
+// pocket until its bottom rides a few px above the binder's top edge, (2) it FLIPS in
+// mid-air, (3) it lowers back down to REST ON TOP of its pocket (above it, not tucked
+// under the lip) and stays there, flipped, until clicked again or dragged to the timer.
+// To the FRONT: the same three beats in reverse, ending tucked back inside the pocket.
+// While airborne the card is position:fixed (escapes the scroller's overflow clip).
+// The card must turn over in OPEN AIR, well clear of the pocket — a small gap reads as
+// "flipping inside the pocket" (physically impossible). This lifts its bottom a generous
+// margin above the binder's top edge so there's obvious daylight under it when it flips.
+const LIFT_GAP = 26;   // px the lifted card's bottom clears the binder's top edge (enough
+                       // daylight to flip in the clear, without flying far out of the binder)
+const REST_RISE = 8;   // px the resting flipped card sits proud of its pocket's top
+
+// pin the card at its current on-screen spot in TRUE viewport-fixed coords. We must
+// PORTAL it to <body> first: ancestors with perspective/backdrop-filter (.binder__row,
+// .binder__page) form a containing block that would otherwise trap position:fixed and
+// resolve `top` against them, not the viewport. At <body> there are no such ancestors,
+// so fixed is genuinely viewport-fixed (and it also escapes the scroller's overflow clip).
+function pin(card) {
+  const pocket = card.closest(".pocket");
+  const r = card.getBoundingClientRect();
+  card._homePocket = pocket;                    // remember where to return it
+  pocket.classList.add("bn-lent");              // hold the sleeve open while the card is away
+  card.classList.add("airborne");
+  card.style.left = r.left + "px";
+  card.style.width = r.width + "px";
+  card.style.top = r.top + "px";
+  document.body.appendChild(card);              // portal out of the perspective/backdrop subtree
+  void card.offsetWidth;                        // flush layout so the next `top` animates
+  return r;
+}
+function unpin(card) {
+  card.classList.remove("airborne");
+  card.style.left = card.style.width = card.style.top = "";
+  if (card._homePocket) {                        // return it to its pocket in flow
+    card._homePocket.classList.remove("bn-lent");
+    card._homePocket.appendChild(card);
+    card._homePocket = null;
+  }
+}
+// Put a (still-flipped) card back into its pocket and mark it RESTING. Now it is normal
+// scroll content — it rides the bench natively with zero lag, instead of being a fixed
+// element JS has to chase on every scroll tick. The `.resting` class keeps it lifted/proud.
+function restInPocket(card) {
+  unpin(card);                  // back into the pocket, clears fixed styles + portal
+  card.classList.add("resting");
+}
+const onTopEnd = (card, fn) =>
+  card.addEventListener("transitionend", function h(e) {
+    if (e.target === card && e.propertyName === "top") { card.removeEventListener("transitionend", h); fn(); }
+  });
+const onFlipEnd = (card, fn) => card.querySelector(".card-3d").addEventListener("transitionend", fn, { once: true });
+
+function flipCard(card) {
+  if (card.dataset.busy) return;
+  const toBack = !card.classList.contains("flipped");
+  card.dataset.busy = "1";
+  cardsCol.classList.add("cards--flipping");
+
+  // The card is IN ITS POCKET in both cases now (front-up at rest, or resting+flipped) — a
+  // resting card lives in its pocket as native scroll content, not portaled. So we pin
+  // (portal to <body>) for the airborne animation in BOTH directions. The `.resting` class
+  // is dropped on the way out so it animates as a clean airborne card.
+  const pocket = card.closest(".pocket");
+  card.classList.remove("resting");
+  const r = pin(card);
+  const liftTop = binderEl.getBoundingClientRect().top - r.height - LIFT_GAP;  // bottom just above binder top
+
+  if (toBack) {
+    // beat 1: lift up out of the pocket to the top
+    requestAnimationFrame(() => { card.style.top = liftTop + "px"; });
+    onTopEnd(card, () => {
+      // beat 2: flip in mid-air
+      sndFlip();
+      card.classList.add("flipped");
+      onFlipEnd(card, () => {
+        // beat 3: lower back down and settle RESTING inside its pocket (native scroll, no lag)
+        card.style.top = (pocket.getBoundingClientRect().top + 6) + "px";
+        onTopEnd(card, () => {
+          restInPocket(card);                 // un-portal into pocket, keep flipped + proud
+          delete card.dataset.busy;
+          cardsCol.classList.remove("cards--flipping");
+        });
+      });
+    });
+  } else {
+    // reverse. beat 1: lift the resting flipped card back up to the top
+    requestAnimationFrame(() => { card.style.top = liftTop + "px"; });
+    onTopEnd(card, () => {
+      // beat 2: flip to front in mid-air
+      sndFlip();
+      card.classList.remove("flipped");
+      onFlipEnd(card, () => {
+        // beat 3: drop all the way back down INTO the pocket, then release to normal flow
+        card.style.top = (pocket.getBoundingClientRect().top + 6) + "px";
+        onTopEnd(card, () => {
+          unpin(card);                        // back to plain in-flow, front-up
+          delete card.dataset.busy;
+          cardsCol.classList.remove("cards--flipping");
+        });
+      });
+    });
+  }
+}
+
+// fully restore a card to clean, front-up, in-pocket flow state (no animation).
+// Also un-portals it (puts it back in its home pocket) if it was airborne.
+function resetCard(card) {
+  card.classList.remove("flipped", "flipping", "dragging", "resting");
+  delete card.dataset.busy;
+  if (card.classList.contains("airborne") || card._homePocket) {
+    unpin(card);                          // returns it to its home pocket + clears styles
+  } else {
+    card.closest(".pocket")?.classList.remove("bn-lent");
+    card.style.left = card.style.width = card.style.top = "";
+  }
+}
+
+// DELEGATED on DOCUMENT (not the binder row) because a flipped card portals out to
+// <body> while it rests above its pocket — listeners scoped to .binder__row would miss
+// it there. The .closest(".card") filter keeps these scoped; the slotted card uses
+// .sc-* classes, so there's no collision.
+// UNIFIED POINTER DRAG — works on touch AND mouse (native HTML5 drag-and-drop never fires
+// on touch screens, so we drive everything off pointer events instead). A press that moves
+// mostly UPWARD picks the card up to drop into the slot; a mostly-HORIZONTAL move is left to
+// the bench's native scroll; a press that barely moves is a TAP → flip.
+const DRAG_THRESH = 8;   // px before a press becomes a drag
+let drag = null;         // { card, startX, startY, pointerId, active } while a press is down
+function pointerXY(e){ return { x: e.clientX, y: e.clientY }; }
+
+document.addEventListener("pointerdown", e => {
+  const card = e.target.closest(".card");
+  if (!card || e.button > 0) return;               // primary button / touch only
+  drag = { card, startX: e.clientX, startY: e.clientY, pointerId: e.pointerId, active: false, moved: false };
+});
+
+document.addEventListener("pointermove", e => {
+  if (!drag || e.pointerId !== drag.pointerId) return;
+  const dx = e.clientX - drag.startX, dy = e.clientY - drag.startY;
+  if (!drag.active) {
+    const dist = Math.hypot(dx, dy);
+    if (dist <= DRAG_THRESH) return;
+    drag.moved = true;
+    // horizontal intent → let the bench scroll, give up on dragging this press
+    if (Math.abs(dx) > Math.abs(dy)) { drag = null; return; }
+    // vertical intent → pick the card up
+    startCardDrag(e);
+  }
+  if (drag && drag.active) {
+    e.preventDefault();
+    moveCardTo(e.clientX, e.clientY);
+  }
+}, { passive: false });
+
+document.addEventListener("pointerup", e => {
+  if (!drag || e.pointerId !== drag.pointerId) return;
+  const d = drag; drag = null;
+  if (d.active) {
+    if (overDevice(e.clientX, e.clientY)) { endCardDrag(d.card, true); insertCard(dragData); }
+    else endCardDrag(d.card, false);   // released off-target → drop it back into its pocket
+  } else if (!d.moved) {
+    flipCard(d.card);                  // a tap → flip
+  }
+});
+document.addEventListener("pointercancel", e => {
+  if (drag && drag.active) endCardDrag(drag.card, false);
+  drag = null;
+});
+
+function startCardDrag(e) {
+  const card = drag.card;
+  resetCard(card);                     // snap to front-up, un-portal any flip state
+  drag.active = true;
+  dragData = { name: card.dataset.name, cat: card.dataset.cat, no: card.dataset.no };
+  // pin it under the pointer, portaled to <body> as a fixed follower
+  const r = card.getBoundingClientRect();
+  drag.offX = e.clientX - r.left; drag.offY = e.clientY - r.top;
+  card._dragHome = card.closest(".pocket");
+  card._dragHome?.classList.add("bn-lent");      // hold the sleeve open while the card is out
+  card.style.width = r.width + "px";
+  card.classList.add("dragging");
+  document.body.appendChild(card);
+  // best-effort capture (keeps events on the card if the finger slides off); move/up
+  // listeners live on document anyway, so a failure here is harmless. ponytail: guard the throw.
+  try { card.setPointerCapture?.(e.pointerId); } catch {}
+  moveCardTo(e.clientX, e.clientY);
+}
+function moveCardTo(x, y) {
+  drag.card.style.left = (x - drag.offX) + "px";
+  drag.card.style.top  = (y - drag.offY) + "px";
+}
+// the WHOLE timer device is the drop zone — drop a card anywhere on it to load that card.
+function overDevice(x, y) {
+  const r = device.getBoundingClientRect();
+  return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+}
+function endCardDrag(card, consumed) {
+  card.classList.remove("dragging");
+  card.style.left = card.style.width = card.style.top = "";
+  card._dragHome?.classList.remove("bn-lent");
+  card._dragHome?.appendChild(card);   // return it to its pocket in flow
+  card._dragHome = null;
+}
+
+// passive scroll listener — toggles the left edge-fade. RESTING cards now live in their
+// pockets (native scroll content), so they ride the bench with zero lag — no JS chase.
+// Only a card mid-FLIGHT (the brief lift/flip/drop) is position:fixed; keep it aligned to
+// its pocket so an interrupting scroll doesn't strand it. (ponytail: tiny edge window.)
+binderPage.addEventListener("scroll", () => {
+  document.querySelectorAll(".card.airborne").forEach(card => {
+    const home = card._homePocket;
+    if (home) card.style.left = (home.getBoundingClientRect().left + 6) + "px";  // +6 = pocket padding
+  });
+}, { passive: true });
+
+// fill the bench remainder with EMPTY welded sleeves (so there's no dark void; the page
+// reads as a real binder page with open pockets). Last empty sleeve is the "+ add" one.
+function fillEmptySleeves() {
+  cardsCol.querySelectorAll(".pocket--empty").forEach(p => p.remove());
+  const POCKET_W = 262;
+  const realCount = cardsCol.querySelectorAll(".pocket").length;
+  // how many pockets fit across the visible page, rounded up so we always exceed the bench
+  const fit = Math.ceil(binderPage.clientWidth / POCKET_W) + 1;
+  const need = Math.max(1, fit - realCount);
+  for (let i = 0; i < need; i++) {
+    const empty = document.createElement("div");
+    empty.className = "pocket pocket--empty" + (i === need - 1 ? " pocket--add" : "");
+    empty.innerHTML = '<span class="pocket__ring"></span><span class="pocket__weld-b"></span><span class="pocket__lip"></span>';
+    cardsCol.appendChild(empty);
+  }
+}
+
+// NEW key (or the + add sleeve) → clone a real card template into a fresh pocket, scroll to it
+function addCard() {
+  sndClick();
+  // return any airborne/resting card home first, so every template pocket actually holds its card
+  document.querySelectorAll(".card.airborne, .card.resting").forEach(resetCard);
+  const template = cardsCol.querySelector(".pocket:not(.pocket--empty)");
+  const pocket = template.cloneNode(true);
+  const card = pocket.querySelector(".card");
+  const n = String(12 + cardsCol.querySelectorAll(".pocket:not(.pocket--empty)").length).padStart(3, "0");
+  card.dataset.name = "New Card"; card.dataset.no = n;
+  card.classList.remove("flipped", "flipping", "airborne", "resting", "dragging");   // clone starts clean
+  card.style.left = card.style.width = card.style.top = "";
+  pocket.querySelector(".card-name").textContent = "New Card";
+  pocket.querySelector(".card-no .n").textContent = n;
+  // insert before the first empty sleeve (real cards stay contiguous at the front)
+  const firstEmpty = cardsCol.querySelector(".pocket--empty");
+  cardsCol.insertBefore(pocket, firstEmpty);
+  fillEmptySleeves();
+  binderPage.scrollTo({ left: pocket.offsetLeft - 20, behavior: "smooth" });
+}
+// create a card via the "+" add sleeve at the end of the bench (no NEW tab anymore)
+cardsCol.addEventListener("click", e => { if (e.target.closest(".pocket--add")) addCard(); });
+fillEmptySleeves();
+window.addEventListener("resize", fillEmptySleeves);
+
+/* (drop into the slot is handled by the unified pointer-drag above — overSlot() on pointerup) */
+
+// A card OWNS its timers (engine: up to 10 per card). The starting rack is the loaded
+// card's timer set; we snapshot it so EJECT can take the timers away with the card, and a
+// fresh insert brings a card's timers back. (mock: every inserted card gets this same set.)
+const rackCount = document.querySelector(".rack-count");
+const cardTimersHTML = [...rack.querySelectorAll(".trow:not(.add)")].map(r => r.outerHTML).join("");
+
+function insertCard({ name, cat, no }) {
+  // no card may be left showing its reverse or lifted out of its pocket
+  document.querySelectorAll(".card.flipped, .card.airborne, .card.resting").forEach(resetCard);
+  sndThunk();
+  // the device LOADS the card: its timers fill the rack, and the LCD wakes to the card.
+  device.classList.remove("ejected");
+  const addBtn = rack.querySelector(".trow.add");
+  rack.querySelectorAll(".trow:not(.add)").forEach(r => r.remove());
+  addBtn.insertAdjacentHTML("beforebegin", cardTimersHTML);   // the card brings its timers
+  rackCount.textContent = "03 / 10";
+  lcd.classList.remove("waking"); void lcd.offsetWidth; lcd.classList.add("waking");
+  document.querySelector(".lcd-card").textContent = name;
+  const lit = rack.querySelector(".trow.lit"); if (lit) applyTimerDisplay(lit);   // readout follows the card's first timer
+}
+
+// ── EJECT — truly remove the card AND its timers; the device goes to the empty state ──
+function ejectCard() {
+  sndEject();
+  device.classList.remove("running");
+  device.classList.add("ejected");
+  glyph.textContent = "▶";
+  // the card's timers leave with it — clear the rack down to just the add button
+  rack.querySelectorAll(".trow:not(.add)").forEach(r => r.remove());
+  rackCount.textContent = "00 / 10";
+  // the screen goes blank: no card, no readout, no direction
+  document.querySelector(".lcd-card").textContent = "— NO CARD —";
+  lcdMode.innerHTML = "—";
+  lcdTime.textContent = "--:--"; lcdGhost.textContent = "88:88";
+  lcdSub.textContent = "⏏ ejected ・ insert a card"; lcdSub.classList.remove("live");
+  // all state lamps off (empty device)
+  document.querySelectorAll(".lcd-ticks .on").forEach(t => t.classList.remove("on"));
+}
+document.querySelectorAll(".skey").forEach(b => {
+  if (b.textContent.startsWith("EJECT")) b.addEventListener("click", ejectCard);
+});
+</script>
+</body>
+</html>

@@ -163,7 +163,17 @@ button { font-family: inherit; }
 }
 .pr-stub::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 18px;
   background: linear-gradient(180deg, rgba(14,12,8,.75) 0%, rgba(14,12,8,.45) 30%, transparent 100%); }
-body.on-stats .pr-stub { opacity: 0; }
+/* the stub BECOMES the paper: hidden the whole time one is out; feeds back after a cut */
+.pr.paper-is-out .pr-stub { opacity: 0; }
+.pr .pr-stub.feeding { opacity: 1; animation: feed-new .55s cubic-bezier(.2,.8,.3,1); }
+@keyframes feed-new { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 0 0 0); } }
+/* the power lamp: recessed amber dot, lit while the mechanism runs */
+.pr-power { width: 15px; height: 15px; flex: 0 0 auto; border-radius: 50%;
+  background: radial-gradient(circle at 50% 45%, #5c4326 0 36%, var(--pr-dark) 40%);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.85); }
+.pr.printing .pr-power {
+  background: radial-gradient(circle at 50% 42%, #ffe6a0 0 22%, var(--pr-amber) 26% 38%, var(--pr-dark) 42%);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,.4), 0 0 8px var(--pr-amber); }
 
 /* ═══════════════ THE DEVICE ═══════════════ */
 #device {
@@ -393,6 +403,7 @@ body.on-stats .pr-stub { opacity: 0; }
 .pocket {
   position: relative; flex: 0 0 auto; width: min(252px, 78vw); padding: 8px; border-radius: 8px;
   scroll-snap-align: start; cursor: pointer;
+  isolation: isolate;   /* keep the film/tag/action z-indexes INSIDE the pocket */
   background: linear-gradient(160deg, rgba(255,255,255,.26), rgba(255,255,255,.10));
   box-shadow:
     inset 0 0 0 1px rgba(255,255,255,.5),
@@ -481,13 +492,14 @@ body.on-stats .pr-stub { opacity: 0; }
 .empty-deck { list-style: none; font-family: "Share Tech Mono", monospace; font-size: 11px;
   letter-spacing: .08em; color: var(--ink-soft); padding: 34px 16px; text-align: center; width: 100%; }
 
-/* ═══════════════ THE REPORT (stats = a printed receipt) ═══════════════ */
-.appbar { position: relative; z-index: 5; }   /* the paper feeds out from BEHIND the exit */
-#view-stats { display: flex; justify-content: center; position: relative; z-index: 1; }
-#view-stats[hidden] { display: none; }
+/* ═══════════════ THE PAPERS (report + settings print from the one mouth) ═══════ */
+.appbar { position: relative; z-index: 5; }   /* papers drape OVER the scene below */
+.pr-exit { z-index: 2; }                      /* ...but feed out from BEHIND the exit lip */
 .paper {
+  position: absolute; z-index: 1;
+  top: calc(100% - 12px);         /* anchored at the mouth on the header's bottom edge */
+  left: 50%; margin-left: calc(var(--paper-w) / -2);
   width: var(--paper-w);          /* a hair narrower than the mouth it feeds from */
-  margin-top: -32px;              /* top edge tucks under the exit slot */
   padding: 30px 18px 16px;
   background: var(--pr-paper);
   background-image:
@@ -501,9 +513,8 @@ body.on-stats .pr-stub { opacity: 0; }
                 radial-gradient(var(--tooth) at 50% 100%, transparent 98%, #000) repeat-x 0 100%/18px 18px;
   mask: linear-gradient(#000,#000) no-repeat 0 0/100% calc(100% - 13px),
         radial-gradient(var(--tooth) at 50% 100%, transparent 98%, #000) repeat-x 0 100%/18px 18px;
-  position: relative;
-  animation: spool-in .6s cubic-bezier(.2,.85,.3,1);
 }
+.paper.spooling { animation: spool-in .7s cubic-bezier(.2,.85,.3,1); }
 @keyframes spool-in { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 0 0 0); } }
 /* CUT: torn off (top edge gains the scallop too) and falls away — the gimmick's payoff */
 .paper.cut {
@@ -520,7 +531,7 @@ body.on-stats .pr-stub { opacity: 0; }
 .paper.cut::before { opacity: 0; }   /* a free cut piece has no slot-lip shadow */
 @keyframes cut-fall {
   from { transform: translateY(0) rotate(0deg); }
-  to   { transform: translateY(115vh) rotate(3deg); }
+  to   { transform: translateY(115vh) rotate(var(--fall-tilt, 3deg)); }
 }
 /* the slot lip casts a feed shadow onto the paper top */
 .paper::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 24px; pointer-events: none;
@@ -561,8 +572,28 @@ body.on-stats .pr-stub { opacity: 0; }
   background: repeating-linear-gradient(90deg, var(--pr-print) 0 1px, transparent 1px 2px,
     var(--pr-print) 2px 4px, transparent 4px 7px, var(--pr-print) 7px 9px, transparent 9px 12px); }
 .p-foot { text-align: center; font-size: 13px; color: #7a766a; margin-top: 10px; letter-spacing: .1em; }
-.p-end { text-align: center; font-size: 13px; letter-spacing: .06em; margin-top: 9px;
-  white-space: nowrap; overflow: hidden; }
+/* on-tape control strip: PRINTED onto the paper — a dashed section rule, then ink buttons */
+.p-nav { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px 16px;
+  margin-top: 12px; padding-top: 12px; border-top: 2px dashed #b3afa2; }
+/* PAPER buttons: printed ink, dashed box (a tear-here field on a receipt). Flat, no 3D. */
+.p-btn { font-family: "VT323", monospace; font-size: 18px; letter-spacing: .05em;
+  color: var(--pr-print); background: transparent; cursor: pointer;
+  border: 1.5px dashed var(--pr-print); border-radius: 2px; padding: 2px 12px;
+  transition: background .08s; }
+.p-btn:hover { background: rgba(43,42,37,.06); }
+.p-btn:active { background: rgba(43,42,37,.14); }
+.p-btn.accent { color: #9a5a1e; border-color: #9a5a1e; }
+.p-btn.close { color: #9a5a1e; border-color: #9a5a1e; }
+.p-btn.close:hover, .p-btn.accent:hover { background: rgba(154,90,30,.08); }
+/* the settings sheet: a form PRINTED on the same paper stock */
+.p-note { font-size: 14px; color: #7a766a; line-height: 1.35; margin: 6px 0; }
+.p-field { display: flex; flex-direction: column; gap: 2px; margin: 8px 0;
+  font-size: 14px; color: #7a766a; letter-spacing: .06em; }
+.p-field input { font-family: "VT323", monospace; font-size: 17px; color: var(--pr-print);
+  background: transparent; border: none; border-bottom: 1.5px dashed var(--pr-print);
+  border-radius: 0; padding: 2px 2px 3px; }
+.p-field input:focus { outline: none; background: rgba(43,42,37,.05); }
+.p-field input::placeholder { color: #b3afa2; }
 
 /* ═══════════════ DIALOGS: cream cardstock forms ═══════════════ */
 .editor { border: none; border-radius: 14px; padding: 0; background: transparent; max-width: min(420px, calc(100vw - 32px)); }
@@ -620,9 +651,6 @@ body.on-stats .pr-stub { opacity: 0; }
               0 2px 3px rgba(0,0,0,.3);
 }
 .editor .add:active { box-shadow: inset 0 3px 5px rgba(80,45,5,.55); }
-.settings-note { font-size: 12px; color: var(--ink-soft); font-weight: 500; letter-spacing: .02em;
-  text-transform: none; line-height: 1.45; }
-.settings-note code { font-family: "Share Tech Mono", monospace; font-size: 11px; }
 
 /* wider desks: cap the readout, give the scene air */
 @media (min-width: 600px) {
@@ -632,7 +660,7 @@ body.on-stats .pr-stub { opacity: 0; }
 
 /* one reduced-motion block (mock review D16) */
 @media (prefers-reduced-motion: reduce) {
-  .paper, .paper.cut { animation: none; }
+  .paper.spooling, .paper.cut, .pr-stub.feeding { animation: none; }
   #device.finished .bigbtn { animation: none; }
   .bigbtn, .skey, .pr-key, .lock-toggle, .deck-add { transition: none; }
   .binder__page { scroll-behavior: auto; }

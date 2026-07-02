@@ -17,15 +17,16 @@
 <body>
   <main id="app" class="scene">
 
-    <!-- ═══ PRINTER HEADER: the app bar IS the report printer. The view tabs are its
-         keys; the stats view is the receipt it prints below. ═══ -->
-    <header class="pr appbar">
+    <!-- ═══ PRINTER HEADER: the report printer. It doesn't switch views — it PRINTS.
+         One mouth, one paper out at a time: REPORT prints the stats receipt, SETUP
+         prints the settings form. Pressing a key while a paper is out CUTS it. ═══ -->
+    <header class="pr appbar" id="printer">
       <div class="pr-deck">
         <span class="pr-badge">TIME<b>CARDS</b> <em class="jp">タイムカード ・ TC-580</em></span>
         <span class="pr-cluster">
-          <button id="tab-device" class="pr-key active">DEVICE</button>
-          <button id="tab-stats" class="pr-key alt">REPORT</button>
-          <button id="settings-btn" class="pr-key tiny" title="settings (sync)" aria-label="settings">⚙</button>
+          <button id="print-report" class="pr-key" title="print the activity report">REPORT</button>
+          <button id="print-settings" class="pr-key alt" title="print the settings sheet">SETUP</button>
+          <span class="pr-power" title="power"></span>
         </span>
       </div>
       <div class="pr-exit">
@@ -33,9 +34,66 @@
         <div class="pr-tear"></div>
         <div class="pr-stub"></div>
       </div>
+
+      <!-- THE REPORT: stats frozen onto paper at print time. -->
+      <div id="paper-report" class="paper" hidden>
+        <div class="p-head">
+          <div class="p-title">TIMECARDS</div>
+          <div class="p-sub">ACTIVITY REPORT ・ 活動記録</div>
+          <div class="p-sub" id="s-stamp"></div>
+        </div>
+
+        <section class="stats-summary">
+          <div class="p-row"><span>TOTAL TRACKED</span><b id="s-total">0m</b></div>
+          <div class="p-row"><span>CURRENT STREAK</span><b><span id="s-streak">0</span> DAYS 🔥</b></div>
+          <div class="p-row"><span>LONGEST STREAK</span><b id="s-longest">0</b></div>
+          <div class="p-row"><span>ACTIVE DAYS</span><b id="s-active">0</b></div>
+        </section>
+
+        <section class="stats-block">
+          <h3 class="p-lbl">LAST 14 DAYS</h3>
+          <div id="s-chart" class="chart"></div>
+        </section>
+
+        <section class="stats-block">
+          <h3 class="p-lbl">BY CARD ・ BY TIMER</h3>
+          <div id="s-breakdown" class="breakdown"></div>
+        </section>
+
+        <section class="stats-block">
+          <h3 class="p-lbl">RECENT SESSIONS</h3>
+          <ul id="s-recent" class="recent-list"></ul>
+        </section>
+
+        <div class="p-code"></div>
+        <div class="p-foot">THANK YOU ・ ありがとう</div>
+        <div class="p-nav"><button type="button" class="p-btn close" data-cut>✂ CUT</button></div>
+      </div>
+
+      <!-- THE SETTINGS SHEET: the settings print too — a form ON the paper. -->
+      <div id="paper-settings" class="paper paper--settings" hidden>
+        <form id="settings-form">
+          <div class="p-head">
+            <div class="p-title">SETUP</div>
+            <div class="p-sub">CLOUD SYNC ・ 設定 (OPTIONAL)</div>
+          </div>
+          <p class="p-note">
+            Sync this browser with the CLI / Raspberry Pi via your own Supabase
+            project. Leave blank to keep data only in this browser. Run the schema
+            first (integrations/supabase/schema.sql).
+          </p>
+          <label class="p-field">SUPABASE URL<input id="sb-url" type="url" placeholder="https://xxxx.supabase.co" /></label>
+          <label class="p-field">ANON KEY<input id="sb-key" type="text" placeholder="eyJ…" /></label>
+          <p id="sb-status" class="p-note"></p>
+          <div class="p-nav">
+            <button type="button" id="sb-clear" class="p-btn">USE LOCAL ONLY</button>
+            <button type="submit" class="p-btn accent">SAVE &amp; RELOAD</button>
+            <button type="button" class="p-btn close" data-cut>✂ CUT</button>
+          </div>
+        </form>
+      </div>
     </header>
 
-    <!-- DEVICE VIEW -->
     <div id="view-device">
 
     <!-- ───────── THE DEVICE ───────── -->
@@ -107,43 +165,6 @@
       </div>
     </section>
     </div><!-- /view-device -->
-
-    <!-- STATS VIEW: the printed report. Same paper idiom as the mock's receipt. -->
-    <div id="view-stats" hidden>
-      <div class="paper">
-        <div class="p-head">
-          <div class="p-title">TIMECARDS</div>
-          <div class="p-sub">ACTIVITY REPORT ・ 活動記録</div>
-          <div class="p-sub" id="s-stamp"></div>
-        </div>
-
-        <section class="stats-summary">
-          <div class="p-row"><span>TOTAL TRACKED</span><b id="s-total">0m</b></div>
-          <div class="p-row"><span>CURRENT STREAK</span><b><span id="s-streak">0</span> DAYS 🔥</b></div>
-          <div class="p-row"><span>LONGEST STREAK</span><b id="s-longest">0</b></div>
-          <div class="p-row"><span>ACTIVE DAYS</span><b id="s-active">0</b></div>
-        </section>
-
-        <section class="stats-block">
-          <h3 class="p-lbl">LAST 14 DAYS</h3>
-          <div id="s-chart" class="chart"></div>
-        </section>
-
-        <section class="stats-block">
-          <h3 class="p-lbl">BY CARD ・ BY TIMER</h3>
-          <div id="s-breakdown" class="breakdown"></div>
-        </section>
-
-        <section class="stats-block">
-          <h3 class="p-lbl">RECENT SESSIONS</h3>
-          <ul id="s-recent" class="recent-list"></ul>
-        </section>
-
-        <div class="p-code"></div>
-        <div class="p-foot">THANK YOU ・ ありがとう</div>
-        <div class="p-end">— ✂ — — — — — — — — — — — —</div>
-      </div>
-    </div><!-- /view-stats -->
   </main>
 
   <!-- Card editor: name / category / color / deadline. -->
@@ -192,25 +213,6 @@
       <div class="editor-actions">
         <button type="button" id="timer-cancel" class="ghost">cancel</button>
         <button type="submit" class="add">save</button>
-      </div>
-    </form>
-  </dialog>
-
-  <!-- Settings: optional Supabase sync. Paste your project URL + anon key. -->
-  <dialog id="settings-editor" class="editor">
-    <form method="dialog" id="settings-form">
-      <h3>Cloud sync (optional)</h3>
-      <p class="settings-note">
-        Sync this browser with the CLI / Raspberry Pi via your own Supabase project.
-        Leave blank to keep data only in this browser. Run the schema first
-        (<code>integrations/supabase/schema.sql</code>).
-      </p>
-      <label>Supabase URL<input id="sb-url" type="url" placeholder="https://xxxx.supabase.co" /></label>
-      <label>Anon key<input id="sb-key" type="text" placeholder="eyJ…" /></label>
-      <p id="sb-status" class="settings-note"></p>
-      <div class="editor-actions">
-        <button type="button" id="sb-clear" class="ghost">use local only</button>
-        <button type="submit" class="add">save &amp; reload</button>
       </div>
     </form>
   </dialog>

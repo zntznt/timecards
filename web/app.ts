@@ -51,11 +51,6 @@ const elList = $("card-list");
 const elAdd = $<HTMLButtonElement>("add-card");
 const elCardEditor = $<HTMLDialogElement>("card-editor");
 const elTimerEditor = $<HTMLDialogElement>("timer-editor");
-const elSettings = $<HTMLDialogElement>("settings-editor");
-const elTabDevice = $<HTMLButtonElement>("tab-device");
-const elTabStats = $<HTMLButtonElement>("tab-stats");
-const elViewDevice = $("view-device");
-const elViewStats = $("view-stats");
 
 const GLYPH: Record<string, string> = { start: "▶", pause: "❚❚", resume: "▶", noop: "●" };
 const WORD: Record<string, string> = { start: "START", pause: "PAUSE", resume: "RESUME", noop: "—" };
@@ -101,6 +96,34 @@ function playAlarm(style: AlarmStyle) {
   if (style === "blip") { beep(880, 90); return; }
   beep(660, 180, 0); beep(880, 180, 0.2); beep(1175, 320, 0.42);
 }
+// ── printer sounds (from the mock): key click, dot-matrix chatter, tear ──
+function tone(freq: number, dur: number, type: OscillatorType = "square", gain = 0.18, slideTo?: number) {
+  if (!audioCtx) audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+  const c = audioCtx, t = c.currentTime, o = c.createOscillator(), g = c.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+  g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(c.destination); o.start(t); o.stop(t + dur + 0.02);
+}
+function noiseClick(dur = 0.03, gain = 0.25) {
+  if (!audioCtx) audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+  const c = audioCtx, n = c.createBufferSource(), buf = c.createBuffer(1, c.sampleRate * dur, c.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+  n.buffer = buf;
+  const g = c.createGain(); g.gain.value = gain;
+  const f = c.createBiquadFilter(); f.type = "highpass"; f.frequency.value = 1400;
+  n.connect(f).connect(g).connect(c.destination); n.start();
+}
+const sndClick = () => { noiseClick(0.025, 0.22); tone(220, 0.04, "square", 0.12); };
+function sndPrint() { // dot-matrix printer chatter
+  let t = 0;
+  const iv = setInterval(() => {
+    tone(900 + Math.random() * 400, 0.02, "square", 0.06); noiseClick(0.012, 0.08);
+    if (++t > 16) clearInterval(iv);
+  }, 38);
+}
+function sndCut() { noiseClick(0.06, 0.28); tone(2600, 0.05, "sawtooth", 0.12, 600); noiseClick(0.05, 0.2); }
 let alarmedFor: string | null = null; // timerId:sessionId we've already alarmed
 let lastChimeAt = 0;                  // last time the ringing chime re-played
 const CHIME_EVERY_MS = 5_000;         // chime begs until acknowledged; blip stays a one-shot nudge
@@ -427,15 +450,14 @@ $<HTMLFormElement>("timer-form").onsubmit = async (e) => {
   await renderAll();
 };
 
-// ── settings: Supabase sync ─────────────────────────────────────
-$("settings-btn").onclick = () => {
+// ── settings: Supabase sync (printed onto the settings sheet) ───
+function fillSettings() {
   $<HTMLInputElement>("sb-url").value = localStorage.getItem("tc_sb_url") ?? "";
   $<HTMLInputElement>("sb-key").value = localStorage.getItem("tc_sb_key") ?? "";
   $("sb-status").textContent = localStorage.getItem("tc_sb_url")
-    ? "Currently syncing to Supabase."
-    : "Currently local only (this browser).";
-  elSettings.showModal();
-};
+    ? "CURRENTLY SYNCING TO SUPABASE."
+    : "CURRENTLY LOCAL ONLY (THIS BROWSER).";
+}
 $("sb-clear").onclick = () => {
   localStorage.removeItem("tc_sb_url");
   localStorage.removeItem("tc_sb_key");
@@ -455,28 +477,76 @@ function isoDate(ms: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-// ── view toggle: device ⇆ stats ─────────────────────────────────
-let onStats = false;
-async function showView(stats: boolean) {
-  // Leaving the report = tearing the receipt off: scallop the top edge, let it fall.
-  if (!stats && onStats) {
-    const paper = document.querySelector(".paper");
-    if (paper && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      paper.classList.add("cut");
-      await new Promise(r => setTimeout(r, 560));
-      paper.classList.remove("cut");
-    }
-  }
-  onStats = stats;
-  document.body.classList.toggle("on-stats", stats); // the mouth's stub hides while the report is out
-  elViewDevice.hidden = stats;
-  elViewStats.hidden = !stats;
-  elTabDevice.classList.toggle("active", !stats);
-  elTabStats.classList.toggle("active", stats);
-  if (stats) renderStats();
+// ── THE PRINTER (from the mock, faithfully) ─────────────────────
+// One mouth, one paper out at a time. Pressing EITHER print key while a paper is
+// out CUTS it (whichever it is) — you never get a second paper from the one mouth.
+// A print freezes the app's data onto the paper at THAT moment; the at-rest stub
+// hides while a paper is out (it has BECOME the paper) and feeds back after a cut.
+const elPrinter = $("printer");
+const elPaperReport = $("paper-report");
+const elPaperSettings = $("paper-settings");
+const elStub = elPrinter.querySelector(".pr-stub") as HTMLElement;
+type PaperKind = "report" | "settings";
+let paperOut: PaperKind | null = null;
+let printBusy = false;
+const paperEl = (k: PaperKind) => (k === "report" ? elPaperReport : elPaperSettings);
+const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function randTilt(): string { // a cut sheet drifts with a small random tilt — light paper
+  const deg = 2 + Math.random() * 4;
+  return (Math.random() < 0.5 ? -deg : deg).toFixed(2) + "deg";
 }
-elTabDevice.onclick = () => showView(false);
-elTabStats.onclick = () => showView(true);
+function feedStubBack(done: () => void) {
+  elPrinter.classList.remove("paper-is-out");
+  if (reducedMotion()) { done(); return; }
+  elStub.classList.remove("feeding"); void elStub.offsetWidth; elStub.classList.add("feeding");
+  sndPrint();
+  elStub.addEventListener("animationend", () => { elStub.classList.remove("feeding"); done(); }, { once: true });
+}
+async function printPaper(kind: PaperKind) {
+  printBusy = true;
+  if (kind === "report") await renderStats();     // freeze the data onto the paper NOW
+  else fillSettings();
+  elPrinter.classList.add("printing", "paper-is-out");
+  const el = paperEl(kind);
+  el.hidden = false;
+  el.classList.remove("cut");
+  el.classList.remove("spooling"); void el.offsetWidth; el.classList.add("spooling");
+  sndPrint();
+  setTimeout(() => { elPrinter.classList.remove("printing"); paperOut = kind; printBusy = false; }, 750);
+}
+function cutPaper() {
+  if (!paperOut) return;
+  printBusy = true;
+  const el = paperEl(paperOut);
+  sndCut();
+  if (reducedMotion()) {
+    el.hidden = true; el.classList.remove("spooling");
+    paperOut = null; feedStubBack(() => { printBusy = false; });
+    return;
+  }
+  el.style.setProperty("--fall-tilt", randTilt());
+  el.classList.remove("spooling");
+  el.classList.add("cut");
+  el.addEventListener("animationend", () => {
+    el.hidden = true;
+    el.classList.remove("cut", "spooling");
+    paperOut = null;
+    feedStubBack(() => { printBusy = false; });  // mouth feeds stub → ready
+  }, { once: true });
+}
+function pressPrintKey(kind: PaperKind) {
+  sndClick();
+  if (printBusy) return;              // mid print/cut/feed — ignore
+  if (paperOut) { cutPaper(); return; }   // a paper is out → cut it, whichever key
+  printPaper(kind);
+}
+$("print-report").onclick = () => pressPrintKey("report");
+$("print-settings").onclick = () => pressPrintKey("settings");
+// the printed ✂ CUT buttons on the papers themselves
+document.querySelectorAll<HTMLButtonElement>("[data-cut]").forEach(b => {
+  b.onclick = () => { if (!printBusy && paperOut) cutPaper(); };
+});
 
 // ── stats rendering ─────────────────────────────────────────────
 function shortDur(ms: number): string {
@@ -557,8 +627,9 @@ function escapeHtml(s: string): string {
 }
 
 // ── tick: re-render the running readout 10×/sec so hundredths move ──
+// (a printed report is a frozen snapshot — it never re-renders; the device below
+// the paper keeps ticking, as a real appliance would)
 setInterval(async () => {
-  if (onStats) return;                 // don't churn the stats DOM while it's open
   const v = await dev.view();
   if (v.state === "running" || v.state === "finished") await renderDevice();
 }, 100);

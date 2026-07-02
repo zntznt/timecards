@@ -312,7 +312,6 @@ async function renderDeck() {
   // a card portaled to <body> mid-gesture belongs to the OLD render — clear it
   document.querySelectorAll("body > .card").forEach(c => c.remove());
   elList.innerHTML = "";
-  $("deck-count").textContent = `${cards.length} CARD${cards.length === 1 ? "" : "S"}`;
   for (let i = 0; i < cards.length; i++) {
     elList.appendChild(await cardItem(cards[i], active, i, sessions, now));
   }

@@ -382,10 +382,6 @@ button { font-family: inherit; }
   font-size: 9px; letter-spacing: .14em; color: var(--ink-soft); opacity: .7; font-weight: 600; }
 
 /* ═══════════════ THE BINDER ═══════════════ */
-.deck-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; padding: 0 2px; }
-.deck-title { font-weight: 700; letter-spacing: .2em; font-size: 13px; color: var(--ink); text-transform: uppercase; }
-.deck-title .jp { font-size: 11px; color: var(--ink-soft); margin-left: 6px; font-weight: 500; }
-.deck-count { font-size: 11px; color: var(--ink-soft); letter-spacing: .1em; font-weight: 600; }
 /* the frosted polypropylene sheet, one horizontal scroll of welded pockets */
 .binder__page {
   border-radius: 9px 9px 0 0;

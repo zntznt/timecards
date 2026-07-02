@@ -7,7 +7,7 @@
   /* responsive device path — everything derives from this (mock review D1).
      ONE paper path: the mouth fits the header, every print is a hair narrower
      than the mouth (the mock's rule — paper must fit through its slot). */
-  --device-w: min(540px, calc(100vw - 24px));
+  --device-w: min(540px, calc(100vw - 32px));
   --mouth-w:  min(340px, calc(var(--device-w) - 40px));
   --paper-w:  min(320px, calc(var(--device-w) - 60px));
   /* Showa appliance palette: muted fields, one hot accent */
@@ -65,16 +65,17 @@ body::after {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 .scene {
-  width: var(--device-w);
-  margin: 0 auto;
+  width: 100%;
   display: flex; flex-direction: column; gap: 28px;
-  padding-bottom: 48px;
+  padding: 0 16px 48px;
 }
+/* device view: the appliance centered, the binder bench full-bleed below it */
+#view-device { display: flex; flex-direction: column; gap: 28px; }
 .jp { font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 500; }
 button { font-family: inherit; }
 
 /* ═══════════════ PRINTER HEADER (the app bar) ═══════════════ */
-.appbar { width: 100%; }
+.appbar { width: var(--device-w); max-width: 100%; margin: 0 auto; }
 .pr-deck {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   padding: 12px 16px;
@@ -177,7 +178,7 @@ button { font-family: inherit; }
 
 /* ═══════════════ THE DEVICE ═══════════════ */
 #device {
-  width: 100%;
+  width: var(--device-w); max-width: 100%; margin: 0 auto;
   background: linear-gradient(180deg, var(--shell-hi), var(--shell) 14%, var(--shell) 86%, var(--shell-lo));
   border-radius: 22px;
   padding: 16px;

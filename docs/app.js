@@ -40,6 +40,7 @@ const elSub = $("sub");
 const elBig = $                   ("big-button");
 const elBigLabel = $("big-label");
 const elStop = $                   ("stop");
+const elFinish = $                   ("finish");
 const elReset = $                   ("reset");
 const elEject = $                   ("eject");
 const elLock = $                   ("lock-toggle");
@@ -101,7 +102,7 @@ async function renderDevice() {
     elReadout.textContent = "00:00";
     elSub.textContent = "slot a card from your deck to begin";
     elBigLabel.textContent = "●";
-    elBig.disabled = true; elStop.disabled = elReset.disabled = elEject.disabled = true;
+    elBig.disabled = true; elStop.disabled = elFinish.disabled = elReset.disabled = elEject.disabled = true;
     elTimers.hidden = true;
     return;
   }
@@ -117,7 +118,7 @@ async function renderDevice() {
     elReadout.textContent = "—";
     elSub.textContent = "add a timer to begin";
     elBigLabel.textContent = "●";
-    elBig.disabled = true; elStop.disabled = elReset.disabled = true;
+    elBig.disabled = true; elStop.disabled = elFinish.disabled = elReset.disabled = true;
     return;
   }
   elTimerName.textContent = v.timer.name;
@@ -130,16 +131,18 @@ async function renderDevice() {
 
   elBigLabel.textContent = v.state === "finished" ? "↻" : (GLYPH[bigButtonAction(v.state)] ?? "●");
 
-  // stop = freeze a RUNNING timer; reset = discard any live run (running/paused/finished).
+  // stop = freeze a RUNNING timer; finish = bank any live run to history;
+  // reset = discard any live run (running/paused/finished).
   const hasRun = v.state === "running" || v.state === "paused" || v.state === "finished";
   elStop.disabled = v.locked || v.state !== "running";
+  elFinish.disabled = v.locked || !hasRun;
   elReset.disabled = v.locked || !hasRun;
 
   if (v.state === "ready") { elSub.textContent = "press to start"; }
   else if (v.state === "running") { elSub.textContent = v.mode === "down" ? "counting down…" : "tracking…"; }
-  else if (v.state === "paused") { elSub.textContent = "paused — press to resume, or reset"; }
+  else if (v.state === "paused") { elSub.textContent = "paused: press to resume · finish saves · reset discards"; }
   else if (v.state === "finished") {
-    elSub.textContent = "time's up — press ↻ to repeat · reset to clear";
+    elSub.textContent = "time's up: ↻ repeats · finish saves · reset discards";
     const key = v.timer.id + ":" + (v.timer.liveSession?.id ?? "");
     if (alarmedFor !== key) { alarmedFor = key; playAlarm(v.alarmStyle); }
   }
@@ -234,6 +237,7 @@ async function renderAll() { await renderDevice(); await renderDeck(); }
 // ── device interactions ─────────────────────────────────────────
 elBig.onclick = async () => { await dev.press(); await renderAll(); };
 elStop.onclick = async () => { await dev.stop(); await renderAll(); };          // freeze & keep
+elFinish.onclick = async () => { alarmedFor = null; await dev.finish(); await renderAll(); }; // bank to history
 elReset.onclick = async () => { alarmedFor = null; await dev.reset(); await renderAll(); }; // discard
 elEject.onclick = async () => { await dev.eject(); await renderAll(); };
 elLock.onclick = async () => { await dev.lock(); await renderDevice(); };

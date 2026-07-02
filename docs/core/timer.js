@@ -23,11 +23,15 @@ export function dayCountOf(card             , now        )                  {
   return { days: elapsedDays, kind, passed: false };
 }
 
-/** Elapsed run time (ms), excluding paused stretches. `now` = current epoch ms. */
+/** Elapsed run time (ms), excluding paused stretches. `now` = current epoch ms.
+ *  A countdown never elapses past its target: time spent ringing in the
+ *  finished state (before the user presses repeat/reset) is not tracked time. */
 export function elapsed(session         , now        )         {
   const end = session.endedAt ?? now;
   const pausedNow = session.pausedAt !== null ? now - session.pausedAt : 0;
-  return Math.max(0, end - session.startedAt - session.pausedMs - pausedNow);
+  const raw = Math.max(0, end - session.startedAt - session.pausedMs - pausedNow);
+  if (session.mode === "down" && session.targetMs !== null) return Math.min(raw, session.targetMs);
+  return raw;
 }
 
 /** True once a countdown has reached its target. Always false for 'up' mode. */

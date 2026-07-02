@@ -66,8 +66,9 @@ http://localhost:8000/docs/index.html.
    not a running counter. This is why a timer survives the app closing/reopening.
 4. **One card + one active timer at a time.** A card holds ≤10 timers; switching a
    timer (or swapping the card) *suspends* the current one (pauses, held on the
-   timer) rather than stopping it. `stop()` is what finalizes to history. Don't add
-   multi-slot or multi-active-timer without re-reading the spec.
+   timer) rather than stopping it. `stop()` freezes and keeps, `reset()` discards;
+   only `finish()` (or a repeat, or deleting the timer) banks the run to history.
+   Don't add multi-slot or multi-active-timer without re-reading the spec.
 5. **`--json` on every CLI command.** It's the integration surface for hardware.
    Don't break the JSON shape; it's a contract (see `guidance/INTERFACES.md`).
 6. **Never describe this product as based on any specific physical timer device.**

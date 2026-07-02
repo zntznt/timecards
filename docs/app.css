@@ -399,89 +399,219 @@ button { font-family: inherit; }
   scrollbar-width: none;
 }
 .binder__page::-webkit-scrollbar { display: none; }
-.binder__row { display: flex; list-style: none; min-width: 100%; padding: 6px 8px; gap: 0; }
+.binder__row { display: flex; list-style: none; min-width: 100%; padding: 6px 8px; gap: 0;
+  perspective: 1100px; }   /* one shared vanishing point down the page */
+
+/* POCKET — a light frosted-PP welded sleeve, card sealed inside. Bright weld
+   perimeter + a repeating vertical seam so neighbours share one welded line. */
 .pocket {
-  position: relative; flex: 0 0 auto; width: min(252px, 78vw); padding: 8px; border-radius: 8px;
-  scroll-snap-align: start; cursor: pointer;
+  position: relative; flex: 0 0 auto; width: min(262px, 80vw); padding: 6px; border-radius: 8px;
+  scroll-snap-align: start;
   isolation: isolate;   /* keep the film/tag/action z-indexes INSIDE the pocket */
   background: linear-gradient(160deg, rgba(255,255,255,.26), rgba(255,255,255,.10));
   box-shadow:
     inset 0 0 0 1px rgba(255,255,255,.5),
+    inset 0 0 0 1.5px rgba(40,34,20,.10),
     inset -1px 0 0 rgba(255,255,255,.55),
-    inset -2px 0 0 rgba(40,34,20,.18);
+    inset -2px 0 0 rgba(40,34,20,.18),
+    inset 1px 0 0 rgba(255,255,255,.35);
 }
-/* PP film over the card: one specular streak, so the card reads as sealed in plastic */
-.pocket::before { content: ""; position: absolute; inset: 8px; border-radius: 6px; z-index: 5; pointer-events: none;
+/* PP film over the card — a faint cloudy veil + ONE hero specular streak, so you see
+   the card THROUGH plastic. 74deg streak crosses the card's 118deg foil glare. */
+.pocket::before { content: ""; position: absolute; inset: 6px; border-radius: 6px; z-index: 6; pointer-events: none;
   background:
-    linear-gradient(74deg, transparent 0 36%, rgba(255,255,255,.28) 44%, rgba(255,255,255,.4) 48%, rgba(255,255,255,.14) 53%, transparent 66%),
-    rgba(255,255,255,.06); }
-/* IN USE: the slotted card's pocket wears a vermilion tag (mock review U14/D4) */
-.pocket.in-use::after {
-  content: "IN USE ・ 使用中"; position: absolute; top: 2px; left: 50%; transform: translateX(-50%);
-  z-index: 6; font-family: "Zen Kaku Gothic New", sans-serif; font-size: 8px; font-weight: 700;
-  letter-spacing: .1em; color: #fff6ec; background: var(--vermilion);
-  border-radius: 3px; padding: 1px 7px; box-shadow: 0 1px 2px rgba(0,0,0,.35);
-  white-space: nowrap;
+    linear-gradient(74deg, transparent 0 36%, rgba(255,255,255,.30) 44%, rgba(255,255,255,.42) 48%, rgba(255,255,255,.16) 53%, transparent 66%),
+    radial-gradient(120% 60% at 50% -12%, rgba(255,255,255,.22), transparent 60%),
+    rgba(255,255,255,.07); }
+.pocket__ring { position: absolute; inset: 4px; border-radius: 7px; z-index: 3; pointer-events: none;
+  background: rgba(255,255,255,.08);
+  -webkit-mask: radial-gradient(closest-side, transparent 70%, #000 86%); mask: radial-gradient(closest-side, transparent 70%, #000 86%); }
+.pocket__weld-b { position: absolute; left: 6px; right: 6px; bottom: 5px; height: 3px; z-index: 4; pointer-events: none;
+  background: linear-gradient(rgba(255,255,255,.55), rgba(40,34,20,.18)); filter: blur(.4px); border-radius: 2px; }
+.pocket__lip { position: absolute; left: 6px; right: 6px; top: 5px; height: 8px; z-index: 6; pointer-events: none;
+  box-shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 2px 0 rgba(40,34,20,.12) inset; }
+/* the pocket's top-center tab: SLOT inserts the card; the slotted pocket wears IN USE */
+.pocket-tab {
+  position: absolute; top: 0; left: 50%; transform: translateX(-50%); z-index: 7;
+  font-family: "Zen Kaku Gothic New", sans-serif; font-size: 8px; font-weight: 700;
+  letter-spacing: .1em; border: none; cursor: pointer; white-space: nowrap;
+  color: #3a2a12; background: linear-gradient(180deg, #f7be5a, var(--pr-amber));
+  border-radius: 0 0 4px 4px; padding: 2px 9px; box-shadow: 0 1px 2px rgba(0,0,0,.3);
 }
-.pocket.in-use .card-sticker { box-shadow:
-  0 0 0 1.5px color-mix(in srgb, var(--cat) 60%, #000),
-  0 0 0 3px var(--vermilion),
-  0 8px 18px -5px rgba(60,52,30,.5); }
+.pocket.in-use .pocket-tab { background: var(--vermilion); color: #fff6ec; cursor: default; }
 
-/* the die-cut sticker card */
-.card-sticker {
+/* ── THE CARD: a die-cut Bikkuriman sticker that FLIPS to a documentary back ── */
+.card-3d {
   --cat: var(--olive);
-  background: var(--cat);
-  border: 2.5px solid #fdfaf0;
-  border-radius: 10px;
-  padding: 8px 9px;
-  display: flex; flex-direction: column; gap: 7px;
+  position: relative; width: 100%; transform-style: preserve-3d;
+  transition: transform 300ms cubic-bezier(.45,.05,.55,.95);
+  background: var(--cat);                      /* the colored die-cut frame rotates WITH the faces */
+  border: 2.5px solid #fdfaf0; border-radius: 12px; padding: 4px;
+  cursor: pointer;
   box-shadow:
     0 0 0 1.5px color-mix(in srgb, var(--cat) 60%, #000),
     0 8px 18px -5px rgba(60,52,30,.5),
-    inset 0 1px 0 rgba(255,255,255,.6);
-  position: relative;
+    inset 0 1px 0 rgba(255,255,255,.4);
 }
-/* printed cardstock face behind the content */
-.card-sticker::before {
-  content: ""; position: absolute; inset: 3px; border-radius: 6px; z-index: 0;
-  background: linear-gradient(155deg, #faf6ea, #efe7d2 70%, #e3d8bb);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.5);
+.pocket.flipped .card-3d { transform: rotateY(180deg); }
+.pocket.in-use .card-3d { box-shadow:
+  0 0 0 1.5px color-mix(in srgb, var(--cat) 60%, #000),
+  0 0 0 3px var(--vermilion),
+  0 8px 18px -5px rgba(60,52,30,.5); }
+.card-face.front, .card-back { backface-visibility: hidden; -webkit-backface-visibility: hidden; border-radius: 8px; }
+/* FRONT: deep jewel base + cosmic sparkle + inner light rays, foil over it */
+.card-face.front {
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column; gap: 7px; padding: 8px 9px; min-height: 196px;
+  background:
+    radial-gradient(2px 2px at 22% 26%, rgba(255,247,210,.9), transparent),
+    radial-gradient(1.5px 1.5px at 71% 20%, rgba(255,255,255,.85), transparent),
+    radial-gradient(2px 2px at 85% 60%, rgba(255,240,180,.7), transparent),
+    radial-gradient(1.5px 1.5px at 33% 70%, rgba(255,247,210,.7), transparent),
+    repeating-conic-gradient(from 0deg at 50% 38%, rgba(255,250,225,.05) 0 6deg, transparent 6deg 14deg),
+    linear-gradient(158deg, color-mix(in srgb, var(--cat) 60%, #0d0b1a) 0%, color-mix(in srgb, var(--cat) 80%, #07060f) 100%);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.18), inset 0 -10px 18px rgba(0,0,0,.35);
 }
-.card-sticker > * { position: relative; z-index: 2; }
-.card-art { display: flex; align-items: center; gap: 10px; min-height: 52px; }
-.card-emblem {
-  width: 44px; height: 44px; border-radius: 50%; flex: 0 0 auto;
-  display: flex; align-items: center; justify-content: center;
-  font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 900; font-size: 20px;
-  color: #fff6ec; text-shadow: 0 1px 2px rgba(0,0,0,.35);
-  background: radial-gradient(circle at 38% 30%, color-mix(in srgb, var(--cat) 45%, #fff), var(--cat));
-  box-shadow: inset 0 -2px 4px rgba(0,0,0,.3), inset 0 1px 2px rgba(255,255,255,.5),
-    0 0 0 2px #fdfaf0, 0 0 0 3.5px var(--cat);
+/* gold filigree inner frame */
+.card-face.front::before {
+  content: ""; position: absolute; inset: 3px; border-radius: 6px; pointer-events: none; z-index: 3;
+  border: 1.5px solid transparent;
+  background: linear-gradient(135deg, #fff1c0, #e3bd5c 25%, #a9802a 50%, #e8c878 75%, #fff1c0) border-box;
+  -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  box-shadow: inset 0 0 6px rgba(180,140,40,.4);
 }
-.card-id { min-width: 0; }
-.card-nm { font-weight: 900; font-size: 17px; color: var(--ink); line-height: 1.15;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.card-cat { font-family: "Share Tech Mono", monospace; font-size: 8px; letter-spacing: .08em;
-  color: var(--ink-soft); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.card-foot { display: flex; justify-content: space-between; align-items: center; gap: 6px;
-  background: rgba(250,246,234,.93);
-  border: 1px solid color-mix(in srgb, var(--cat) 45%, transparent);
-  border-radius: 5px; padding: 3px 6px; }
-.card-timers { display: flex; gap: 3px; flex-wrap: wrap; min-width: 0; }
-.tdot { font-family: "Share Tech Mono", monospace; font-size: 8px; letter-spacing: .02em;
-  color: #6a4a16; font-weight: 700; background: #fff6e0;
-  border-radius: 3px; padding: 1px 4px;
-  border: 1px solid color-mix(in srgb, var(--cat) 40%, transparent); white-space: nowrap; }
-.card-total { font-family: "Share Tech Mono", monospace; font-size: 13px; color: var(--ink); flex: 0 0 auto; }
-/* the printed barcode strip: ink bars straight on the cardstock (mock review D2 —
-   no background plate layered over the bars) */
-.barcode { height: 10px; opacity: .55; border-radius: 2px;
-  background: repeating-linear-gradient(90deg,
-    var(--ink) 0 1px, transparent 1px 2px, var(--ink) 2px 4px, transparent 4px 7px,
-    var(--ink) 7px 8px, transparent 8px 12px, var(--ink) 12px 13px, transparent 13px 16px); }
+/* fixed diagonal glare streak — glossy at rest */
+.card-face.front::after {
+  content: ""; position: absolute; inset: 0; border-radius: 8px; pointer-events: none; z-index: 2; mix-blend-mode: screen;
+  background: linear-gradient(118deg, transparent 38%, rgba(255,255,255,.55) 47%, rgba(255,255,255,.2) 51%, transparent 60%);
+}
+/* THE FOIL: holographic field, always faintly on. .foil-* on the pocket picks the hue. */
+.card-3d .foil { position: absolute; inset: 4px; border-radius: 8px; pointer-events: none; z-index: 1;
+  mix-blend-mode: screen; opacity: .86; }
+.card-3d .foil::after { content: ""; position: absolute; inset: 0; border-radius: 8px; pointer-events: none;
+  background: repeating-linear-gradient(70deg, rgba(255,255,255,.16) 0 2px, transparent 2px 5px);
+  mix-blend-mode: screen; }
+.foil-prism .foil { background: conic-gradient(from 0deg, #ff5e7e, #ffd25e, #5effa6, #5ec8ff, #c98bff, #ff5e7e);
+  background-size: 180% 180%; filter: saturate(1.3) blur(2px); }
+.foil-gold .foil { background: linear-gradient(115deg, #fff2c0 20%, #e9b94a 40%, #b8862a 50%, #ffe9a8 60%, #c9a23e 80%);
+  background-size: 250% 250%; }
+.foil-holo .foil { background: conic-gradient(from 30deg, #ff6ec7, #ffe96e, #6effb0, #6ec8ff, #c98bff, #ff6ec7);
+  background-size: 200% 200%; filter: saturate(1.4); }
+.foil-emerald .foil { background: linear-gradient(125deg, #c6ffe9 18%, #4fd6a0 38%, #2a8f7a 50%, #8efce0 62%, #3ec9b0 82%);
+  background-size: 250% 250%; }
+.foil-violet .foil { background: linear-gradient(120deg, #ffd6f5 16%, #c98bff 36%, #7a5cff 50%, #d6b8ff 64%, #9a6cff 84%);
+  background-size: 250% 250%; }
+
+/* TOP ROW: rarity ・ series ・ No. on an opaque cream plate above the foil */
+.card-rank { display: flex; align-items: center; gap: 8px; position: relative; z-index: 4;
+  background: rgba(250,246,234,.93); border: 1px solid color-mix(in srgb, #caa23e 60%, transparent);
+  border-radius: 5px; padding: 2px 7px; }
+.rarity { font-size: 12px; letter-spacing: 1px;
+  background: linear-gradient(#fff7d6, #e3bd5c 45%, #a9802a); -webkit-background-clip: text; background-clip: text;
+  color: transparent; -webkit-text-fill-color: transparent; text-shadow: 0 1px 0 rgba(0,0,0,.2); }
+.card-series { font-family: "Share Tech Mono", monospace; font-size: 8px; letter-spacing: .1em; color: #3a2a12; font-weight: 700;
+  clip-path: polygon(8% 0, 92% 0, 100% 50%, 92% 100%, 8% 100%, 0 50%); border: none;
+  background: linear-gradient(180deg, #fff3c4, #e7b84e 45%, #9a6a16); padding: 2px 8px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.6), 0 1px 2px rgba(0,0,0,.4);
+  text-shadow: 0 1px 0 rgba(255,255,255,.4);
+  max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-no { margin-left: auto; font-family: "Share Tech Mono", monospace; display: flex; align-items: baseline; gap: 3px; }
+.card-no .l { font-size: 8px; letter-spacing: .1em; color: var(--ink-soft); }
+.card-no .n { font-size: 15px; font-weight: 700;
+  background: linear-gradient(#fff7d6, #caa23e 55%, #8a6418); -webkit-background-clip: text; background-clip: text;
+  color: transparent; -webkit-text-fill-color: transparent; }
+
+/* ART ZONE: haloed emblem medallion + chrome-gold stamped name */
+.card-art { flex: 1 1 auto; display: flex; align-items: center; gap: 12px; padding: 6px 8px;
+  border-radius: 8px; position: relative; isolation: isolate; z-index: 2; }
+.card-art::before {
+  content: ""; position: absolute; left: 36px; top: 50%; width: 96px; height: 96px;
+  transform: translate(-50%, -50%); z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(circle, rgba(255,245,205,.92) 0%, rgba(255,238,175,.35) 28%, transparent 56%),
+    repeating-conic-gradient(from 0deg, rgba(255,247,210,.8) 0 4deg, transparent 4deg 9deg);
+  -webkit-mask: radial-gradient(circle, #000 34%, transparent 70%);
+          mask: radial-gradient(circle, #000 34%, transparent 70%);
+}
+.card-emblem { width: 54px; height: 54px; border-radius: 50%; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center; position: relative; z-index: 1;
+  font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 900; font-size: 26px;
+  color: #fff6ec; text-shadow: 0 0 1px #fff, 0 1px 0 #caa23e, 0 2px 3px rgba(0,0,0,.45);
+  background: radial-gradient(circle at 38% 30%, color-mix(in srgb, var(--cat) 25%, #fff), color-mix(in srgb, var(--cat) 70%, #fff));
+  box-shadow:
+    inset 0 -3px 6px rgba(0,0,0,.3), inset 0 2px 3px rgba(255,255,255,.6),
+    0 0 0 2.5px #fdfaf0, 0 0 0 4px #caa23e, 0 0 0 5px #8a6418, 0 2px 6px rgba(0,0,0,.4);
+}
+.card-emblem::after { content: "\2726"; position: absolute; top: -3px; right: -5px; font-size: 13px;
+  color: #ffe9a8; text-shadow: 0 0 5px #e3bd5c; z-index: 2; }
+.card-id { min-width: 0; position: relative; z-index: 1; }
+.card-nm { font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 900; font-size: 19px; line-height: 1.25;
+  background: linear-gradient(#ffffff, #ffe9a8 45%, #caa23e 56%, #fff7d6);
+  -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;
+  -webkit-text-stroke: 1.1px #2a1d0a; paint-order: stroke fill;
+  text-shadow: 0 1px 0 rgba(0,0,0,.5), 0 0 6px rgba(255,230,150,.35);
+  transform: skewX(-4deg); transform-origin: left center; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+  padding: 1px 3px 2px 1px; margin: -1px -3px -2px -1px; }
+.card-cat { font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: #ffe7b0; font-weight: 700; margin-top: 4px;
+  text-shadow: 0 1px 2px rgba(0,0,0,.6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* FOOT: timer chips + total on an opaque cream plate */
+.card-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  position: relative; z-index: 4; background: rgba(250,246,234,.93);
+  border: 1px solid color-mix(in srgb, #caa23e 50%, transparent); border-radius: 5px; padding: 3px 7px; }
+.card-timers { display: flex; gap: 4px; flex-wrap: wrap; min-width: 0; }
+.tdot { font-family: "Share Tech Mono", monospace; font-size: 8px; letter-spacing: .04em; color: #6a4a16; font-weight: 700;
+  background: #fff6e0; border-radius: 3px; padding: 2px 5px;
+  border: 1px solid color-mix(in srgb, #caa23e 55%, transparent); white-space: nowrap; }
+.card-total { font-family: "Share Tech Mono", monospace; font-size: 14px; color: var(--ink); flex: 0 0 auto; }
+/* barcode: ink bars printed on their own cream plate (bars ON TOP — mock review D2) */
+.barcode { height: 11px; opacity: .6; position: relative; z-index: 4; border-radius: 3px;
+  background:
+    repeating-linear-gradient(90deg, var(--ink) 0 1px, transparent 1px 2px, var(--ink) 2px 4px, transparent 4px 7px, var(--ink) 7px 8px, transparent 8px 12px, var(--ink) 12px 13px, transparent 13px 16px),
+    linear-gradient(rgba(250,246,234,.93), rgba(250,246,234,.93)); }
+
+/* ── THE MATTE BACK: pale newsprint, one-ink offset print, this card's stats ── */
+.card-back {
+  position: absolute; inset: 4px; transform: rotateY(180deg) translateZ(.01px);
+  background:
+    radial-gradient(120% 90% at 50% 40%, #f1ead9, #e6dcc4 100%),
+    repeating-linear-gradient(0deg, rgba(0,0,0,.03) 0 1px, transparent 1px 3px);
+  color: var(--ink);
+  font-family: "Share Tech Mono", monospace;
+  padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.08), inset 0 0 7px rgba(0,0,0,.09);
+}
+.card-back::after { content: ""; position: absolute; inset: 4px;
+  border: 1px solid color-mix(in srgb, var(--cat) 30%, rgba(120,100,60,.4)); border-radius: 7px; pointer-events: none; }
+.cb-id { display: flex; justify-content: space-between; align-items: baseline; font-size: 9px; letter-spacing: .04em;
+  color: var(--ink); padding-bottom: 3px; border-bottom: 1px solid color-mix(in srgb, var(--cat) 45%, transparent); }
+.cb-id .cb-rank { color: color-mix(in srgb, var(--cat) 55%, var(--ink)); font-weight: 700; letter-spacing: .1em; }
+.cb-name-row { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.cb-name { font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 500; font-size: 15px; color: var(--ink); line-height: 1.25;
+  text-shadow: 0 0 .4px currentColor; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cb-seal { flex: 0 0 auto; padding: 1px 5px; border-radius: 3px; font-family: "Share Tech Mono", monospace; font-weight: 700;
+  font-size: 7px; letter-spacing: .1em; line-height: 1.4;
+  color: var(--vermilion); border: 1.5px solid var(--vermilion); opacity: .82; transform: rotate(-3deg);
+  text-shadow: 0 0 .5px var(--vermilion); }
+.cb-ledger { display: flex; flex-direction: column; gap: 1px; flex: 1 1 auto; min-height: 0; }
+.cb-row, .cb-trow { display: flex; align-items: baseline; font-size: 9.5px; line-height: 1.25; color: var(--ink); }
+.cb-row > span, .cb-trow > span { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: .05em; }
+.cb-row > i, .cb-trow > i { flex: 1 1 6px; min-width: 6px; border-bottom: 1px dotted rgba(0,0,0,.35); margin: 0 4px 2px; height: 0; }
+.cb-row > b, .cb-trow > b { flex: 0 0 auto; font-weight: 700; font-size: 10.5px; text-align: right; }
+.cb-rule { border-top: 1px solid color-mix(in srgb, var(--cat) 35%, rgba(120,100,60,.35)); margin: 1px 0; }
+.cb-roster { display: flex; flex-direction: column; gap: 0; overflow: hidden; }
+.cb-trow { font-size: 9px; color: var(--ink-soft); }
+.cb-trow > b { font-size: 9.5px; color: var(--ink); }
+.cb-foot { margin-top: 2px; }
+.cb-tick { height: 4px; background: repeating-linear-gradient(90deg, var(--ink) 0 1px, transparent 1px 3px); opacity: .4; border-radius: 1px; }
+.cb-reg { display: flex; justify-content: space-between; align-items: center; font-size: 7px; color: var(--ink-soft); margin-top: 2px; letter-spacing: .03em; }
+.cb-chop { flex: 0 0 auto; width: 13px; height: 13px; border-radius: 50%; border: 1px solid var(--vermilion); color: var(--vermilion); opacity: .7;
+  display: flex; align-items: center; justify-content: center; font-size: 8px; transform: rotate(4deg); }
+
 /* pocket-corner keys for edit/delete */
-.card-actions { position: absolute; top: 10px; right: 10px; z-index: 6; display: flex; gap: 4px; }
+.card-actions { position: absolute; top: 10px; right: 10px; z-index: 7; display: flex; gap: 4px; }
 .card-edit, .card-del {
   font-size: 10px; line-height: 1; cursor: pointer; color: var(--ink-soft);
   background: rgba(250,246,234,.9); border: 1px solid var(--shell-edge);
@@ -489,8 +619,15 @@ button { font-family: inherit; }
   box-shadow: 0 1px 2px rgba(0,0,0,.2);
 }
 .card-edit:hover, .card-del:hover { color: var(--ink); }
+
+/* EMPTY welded sleeve + the "+" ADD sleeve (same weld idiom, no card) */
+.pocket--empty, .pocket--add { min-height: 224px; }
+.pocket--add { cursor: pointer; }
+.pocket--add::after { content: "+"; position: absolute; inset: 0; display: grid; place-items: center;
+  font: 300 34px/1 "Saira Condensed", sans-serif; color: rgba(40,34,20,.28); pointer-events: none; }
 .empty-deck { list-style: none; font-family: "Share Tech Mono", monospace; font-size: 11px;
-  letter-spacing: .08em; color: var(--ink-soft); padding: 34px 16px; text-align: center; width: 100%; }
+  letter-spacing: .08em; color: var(--ink-soft); padding: 34px 16px; text-align: center;
+  align-self: center; }
 
 /* ═══════════════ THE PAPERS (report + settings print from the one mouth) ═══════ */
 .appbar { position: relative; z-index: 5; }   /* papers drape OVER the scene below */
@@ -662,6 +799,7 @@ button { font-family: inherit; }
 /* one reduced-motion block (mock review D16) */
 @media (prefers-reduced-motion: reduce) {
   .paper.spooling, .paper.cut, .pr-stub.feeding { animation: none; }
+  .card-3d { transition: opacity 1ms; }   /* flip lands instantly, no 3D turn */
   #device.finished .bigbtn { animation: none; }
   .bigbtn, .skey, .pr-key, .lock-toggle, .deck-add { transition: none; }
   .binder__page { scroll-behavior: auto; }

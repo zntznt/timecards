@@ -6,10 +6,10 @@ import { Device } from "./core/device.js";
 import { IdbStore } from "./idb-store.js";
 import { SupabaseStore } from "./core/supabase-store.js";
 import { fmtDuration } from "./core/format.js";
-import { bigButtonAction } from "./core/timer.js";
+import { bigButtonAction, elapsed } from "./core/timer.js";
 import { MAX_TIMERS } from "./core/types.js";
 import * as Stats from "./core/stats.js";
-                                                                                                            
+                                                                                                                     
 
 // Backend selection: if the user saved Supabase creds (settings ⚙), sync there;
 // otherwise keep data in this browser's IndexedDB. Opt-in — IDB is the default.
@@ -124,6 +124,25 @@ function sndPrint() { // dot-matrix printer chatter
   }, 38);
 }
 function sndCut() { noiseClick(0.06, 0.28); tone(2600, 0.05, "sawtooth", 0.12, 600); noiseClick(0.05, 0.2); }
+// card FLIP — a short PAPER turn: low thock + swept-noise whoosh + settle snap (from the mock)
+function sndFlip() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || (window       ).webkitAudioContext)();
+  const c = audioCtx, t = c.currentTime;
+  const j = 1 + (Math.random() * 0.16 - 0.08);   // ±8% jitter so flips don't sound canned
+  tone(95 * j, 0.05, "sine", 0.09);
+  const n = c.createBufferSource(), dur = 0.12 * j;
+  const buf = c.createBuffer(1, c.sampleRate * dur, c.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  n.buffer = buf;
+  const bp = c.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = 0.8;
+  bp.frequency.setValueAtTime(700, t); bp.frequency.exponentialRampToValueAtTime(2800, t + 0.09);
+  const g = c.createGain(); g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.16, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 6000;   // keep it papery
+  n.connect(bp).connect(g).connect(lp).connect(c.destination); n.start(t); n.stop(t + dur + 0.02);
+  setTimeout(() => { noiseClick(0.012, 0.13); tone(3100 * j, 0.015, "sine", 0.08); }, 300);
+}
 let alarmedFor                = null; // timerId:sessionId we've already alarmed
 let lastChimeAt = 0;                  // last time the ringing chime re-played
 const CHIME_EVERY_MS = 5_000;         // chime begs until acknowledged; blip stays a one-shot nudge
@@ -243,68 +262,152 @@ function timerRow(t       , activeId               )                {
   return li;
 }
 
+// Cards flip like the physical stickers they are: TAP turns a card over to its
+// documentary back (this card's stats); the pocket's SLOT tab inserts it.
+const flippedCards = new Set        ();
+const FOILS = ["foil-prism", "foil-gold", "foil-holo", "foil-emerald", "foil-violet"];
+function foilFor(id        )         { // stable per-card foil treatment
+  let h = 0;
+  for (const ch of id) h = (h * 31 + ch.codePointAt(0) ) | 0;
+  return FOILS[Math.abs(h) % FOILS.length];
+}
+function rarityFor(totalMs        )         { // cards level up with tracked time
+  return totalMs >= 36_000_000 ? "★★★" : totalMs >= 3_600_000 ? "★★☆" : "★☆☆";
+}
+const el = (tag        , cls        , text         ) => {
+  const e = document.createElement(tag); e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+};
+
 async function renderDeck() {
   const cards = await dev.listCards();
   const active = (await dev.view()).card?.id ?? null;
+  const { sessions, now } = await dev.statsData();
   elList.innerHTML = "";
   if (cards.length === 0) {
-    const li = document.createElement("li");
-    li.className = "empty-deck"; li.textContent = "empty binder ・ make a card with + NEW CARD";
-    elList.appendChild(li); return;
+    elList.appendChild(el("li", "empty-deck", "empty binder ・ add a card"));
   }
-  for (const c of cards) elList.appendChild(await cardItem(c, active));
+  for (let i = 0; i < cards.length; i++) {
+    elList.appendChild(await cardItem(cards[i], active, i, sessions, now));
+  }
+  // the "+" sleeve is the card-creation entry point; empty sleeves fill the page
+  // so it reads as a real binder sheet
+  const add = el("li", "pocket pocket--add");
+  add.title = "new card";
+  add.onclick = () => openCardEditor(null);
+  elList.appendChild(add);
+  for (let n = cards.length + 1; n < 3; n++) {
+    const sleeve = el("li", "pocket pocket--empty");
+    sleeve.append(el("span", "pocket__ring"), el("span", "pocket__weld-b"), el("span", "pocket__lip"));
+    elList.appendChild(sleeve);
+  }
 }
 
-async function cardItem(c      , active               )                         {
-  const total = await dev.totalMs(c.id);
+async function cardItem(c      , active               , index        , sessions           , now        )                         {
   const timers = await dev.listTimers(c.id);
-  // A welded binder POCKET holding a die-cut sticker card. The card's own color
-  // drives the frame via --cat; the slotted card's pocket shows an IN USE tag.
-  const li = document.createElement("li");
-  li.className = "pocket" + (c.id === active ? " in-use" : "");
-  const card = document.createElement("div");
-  card.className = "card-sticker";
-  card.style.setProperty("--cat", c.color || "#6f7457");
+  const mine = sessions.filter(s => s.cardId === c.id);
+  const total = mine.reduce((sum, s) => sum + elapsed(s, now), 0);
+  const longest = mine.reduce((max, s) => Math.max(max, elapsed(s, now)), 0);
+  const since = mine.length ? isoDate(Math.min(...mine.map(s => s.startedAt))) : "—";
+  const perTimer = new Map                ();
+  for (const s of mine) perTimer.set(s.timerId, (perTimer.get(s.timerId) ?? 0) + elapsed(s, now));
 
-  const emblem = document.createElement("div"); emblem.className = "card-emblem";
-  emblem.textContent = [...c.name][0]?.toUpperCase() ?? "★";
-  const id = document.createElement("div"); id.className = "card-id";
-  const nm = document.createElement("div"); nm.className = "card-nm jp"; nm.textContent = c.name;
-  const det = document.createElement("div"); det.className = "card-cat";
-  const bits           = [`${timers.length} TIMER${timers.length === 1 ? "" : "S"}`];
-  if (c.category) bits.unshift(c.category.toUpperCase());
-  if (c.deadline) bits.push((c.deadlineKind ?? "until") === "until" ? "⏰ DEADLINE" : "🔥 STREAK");
-  det.textContent = bits.join(" ・ ");
-  id.append(nm, det);
-  const art = document.createElement("div"); art.className = "card-art";
+  const stars = rarityFor(total);
+  const no = String(index + 1).padStart(3, "0");
+  const series = (c.category ?? "SER.01").toUpperCase().slice(0, 10);
+  const inUse = c.id === active;
+
+  const li = el("li", `pocket ${foilFor(c.id)}` + (inUse ? " in-use" : "") + (flippedCards.has(c.id) ? " flipped" : ""))                 ;
+  li.append(el("span", "pocket__ring"), el("span", "pocket__weld-b"), el("span", "pocket__lip"));
+
+  // the pocket tab: SLOT inserts; the slotted pocket wears IN USE (mock review U14/D4)
+  const tab = el("button", "pocket-tab", inUse ? "IN USE ・ 使用中" : "SLOT ・ 挿入")                     ;
+  tab.disabled = inUse;
+  tab.onclick = async (e) => { e.stopPropagation(); if (!inUse) { await dev.slot(c.id); await renderAll(); } };
+
+  const card3d = el("div", "card-3d");
+  card3d.style.setProperty("--cat", c.color || "#6f7457");
+
+  // ── FRONT: the Bikkuriman sticker ──
+  const front = el("div", "card-face front");
+  front.appendChild(el("span", "foil"));
+
+  const rank = el("div", "card-rank");
+  rank.append(el("span", "rarity", stars), el("span", "card-series", series));
+  const noEl = el("span", "card-no");
+  noEl.append(el("span", "l", "No."), el("span", "n", no));
+  rank.appendChild(noEl);
+
+  const art = el("div", "card-art");
+  const emblem = el("div", "card-emblem", [...c.name][0]?.toUpperCase() ?? "★");
+  const id = el("div", "card-id");
+  id.append(el("div", "card-nm jp", c.name), el("div", "card-cat",
+    c.category ? c.category.toUpperCase() : `${timers.length} TIMER${timers.length === 1 ? "" : "S"}`));
   art.append(emblem, id);
 
-  const foot = document.createElement("div"); foot.className = "card-foot";
-  const chips = document.createElement("div"); chips.className = "card-timers";
+  const foot = el("div", "card-foot");
+  const chips = el("div", "card-timers");
   for (const t of timers.slice(0, 4)) {
-    const chip = document.createElement("span"); chip.className = "tdot";
-    chip.textContent = t.mode === "down" && t.targetMs ? `⧖ ${fmtDuration(t.targetMs)}` : "⏱ SW";
-    chips.appendChild(chip);
+    chips.appendChild(el("span", "tdot", t.mode === "down" && t.targetMs ? `⧖ ${fmtDuration(t.targetMs)}` : "⏱ SW"));
   }
-  const tot = document.createElement("span"); tot.className = "card-total"; tot.textContent = fmtDuration(total);
+  const tot = el("span", "card-total", fmtDuration(total));
   foot.append(chips, tot);
 
-  const barcode = document.createElement("div"); barcode.className = "barcode";
-  card.append(art, foot, barcode);
+  front.append(rank, art, foot, el("div", "barcode"));
 
-  const actions = document.createElement("div"); actions.className = "card-actions";
-  const edit = document.createElement("button");
-  edit.className = "card-edit"; edit.textContent = "✎"; edit.title = "edit card";
+  // ── BACK: matte documentary reverse — THIS card's ledger ──
+  const back = el("div", "card-back");
+  const cbId = el("div", "cb-id");
+  cbId.append(el("span", "", `${series} ・ No.${no}`), el("span", "cb-rank", stars));
+  const nameRow = el("div", "cb-name-row");
+  nameRow.append(el("div", "cb-name", c.name),
+    el("span", "cb-seal", (c.deadlineKind === "since" && c.deadline) ? "STREAK" : c.deadline ? "DEADLINE" : "TIMER"));
+  const ledger = el("div", "cb-ledger");
+  const row = (label        , value        , cls = "cb-row") => {
+    const r = el("div", cls);
+    r.append(el("span", "", label), el("i", ""), el("b", "", value));
+    return r;
+  };
+  ledger.append(
+    row("TOTAL", fmtDuration(total)),
+    row("SESSIONS", String(mine.length)),
+    row("LONGEST", fmtDuration(longest)),
+    row("SINCE", since),
+    el("div", "cb-rule"),
+  );
+  const roster = el("div", "cb-roster");
+  for (const t of timers) {
+    roster.appendChild(row(`${t.mode === "down" ? "▼" : "▲"} ${t.name}`, fmtDuration(perTimer.get(t.id) ?? 0), "cb-trow"));
+  }
+  ledger.appendChild(roster);
+  const cbFoot = el("div", "cb-foot");
+  const reg = el("div", "cb-reg");
+  reg.append(el("span", "", "© TIMECARDS ・ 使用記録"), el("span", "cb-chop", "✓"));
+  cbFoot.append(el("div", "cb-tick"), reg);
+  back.append(cbId, nameRow, ledger, cbFoot);
+
+  card3d.append(front, back);
+
+  const actions = el("div", "card-actions");
+  const edit = el("button", "card-edit", "✎")                     ;
+  edit.title = "edit card";
   edit.onclick = (e) => { e.stopPropagation(); openCardEditor(c); };
-  const del = document.createElement("button");
-  del.className = "card-del"; del.textContent = "✕"; del.title = "delete card";
+  const del = el("button", "card-del", "✕")                     ;
+  del.title = "delete card";
   del.onclick = async (e) => {
     e.stopPropagation();
     if (confirm(`Delete "${c.name}", its timers, and history?`)) { await dev.deleteCard(c.id); await renderAll(); }
   };
   actions.append(edit, del);
-  li.onclick = async () => { await dev.slot(c.id); await renderAll(); };
-  li.append(card, actions);
+
+  // tap the card = turn it over (a physical sticker, not a button)
+  li.onclick = () => {
+    if (flippedCards.has(c.id)) flippedCards.delete(c.id); else flippedCards.add(c.id);
+    li.classList.toggle("flipped");
+    sndFlip();
+  };
+  li.append(tab, card3d, actions);
   return li;
 }
 

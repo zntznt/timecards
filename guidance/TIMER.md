@@ -116,14 +116,18 @@ When a countdown finishes, interfaces play the card's alarm:
 `SlotView.alarmStyle` carries the resolved style (card's, or the `DEFAULT_ALARM`
 fallback). The web app synthesizes tones with WebAudio — no audio files to host.
 Fire the alarm **once** per finished session (track the last-alarmed session id).
+An interface may additionally re-ring a chime periodically while the finished
+state persists — the web UI does, every 5s — but never re-fire for a session
+already acknowledged.
 
 ## Lock
 
-`Slot.locked` freezes the big button and stop — `press()`/`stop()` no-op while
-locked, so you can't fat-finger a running session. The lock toggle itself (`lock()`)
-always works. **Slotting a different card or ejecting clears the lock** (deliberate
-swap = clear intent to move on). Lock is preserved across press/pause/resume/stop of
-the *same* slotted card.
+`Slot.locked` holds the session AND the card: `press()`/`stop()`/`reset()`/
+`finish()`/`switchTimer()`/`slot()`/`eject()` all no-op while locked, so neither a
+fat-finger nor a stray card tap (including NFC) can disturb a running session. The
+lock toggle itself (`lock()`) always works — unlocking is the only way out.
+(Earlier, slotting/ejecting cleared the lock instead; that let a stray tap on the
+deck do exactly what the lock existed to prevent.)
 
 ## Day-count (`dayCount`)
 

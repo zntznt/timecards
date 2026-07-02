@@ -260,17 +260,23 @@ await test("per-timer alarmStyle resolves into the view", async () => {
   assert.equal((await dev.view()).alarmStyle, "blip");
 });
 
-await test("lock ignores press/stop; swap clears it", async () => {
+await test("lock holds the card in: press/stop/eject/swap/switch all no-op until unlock", async () => {
   const { dev, tick } = harness();
   const a = await dev.createCard("A");
   const b = await dev.createCard("B");
   await dev.slot(a.id);
+  const t2 = await dev.addTimer(a.id, "Second");
   await dev.press(); tick(5_000);
   await dev.lock(true);
-  await dev.press();  assert.equal((await dev.view()).state, "running");  // ignored
-  await dev.stop();   assert.equal((await dev.view()).state, "running");  // ignored
+  await dev.press();  assert.equal((await dev.view()).state, "running");   // ignored
+  await dev.stop();   assert.equal((await dev.view()).state, "running");   // ignored
+  await dev.eject();  assert.equal((await dev.view()).card?.id, "a");      // still slotted
+  await dev.slot(b.id); assert.equal((await dev.view()).card?.id, "a");    // swap blocked
+  await dev.switchTimer(t2.id);
+  assert.notEqual((await dev.view()).timer?.id, t2.id);                    // switch blocked
+  await dev.lock(false);
   await dev.slot(b.id);
-  assert.equal((await dev.view()).locked, false);                          // swap cleared lock
+  assert.equal((await dev.view()).card?.id, "b");                          // unlock frees it
 });
 
 await test("NFC slot-by-tag works once registered", async () => {

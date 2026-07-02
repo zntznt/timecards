@@ -110,7 +110,7 @@ async function renderDevice() {
   }
   elCardName.classList.remove("empty");
   elCardName.textContent = v.card!.name;
-  elEject.disabled = false;
+  elEject.disabled = v.locked; // the lock holds the card in
   elTimers.hidden = false;
   renderTimerList(v);
 

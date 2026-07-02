@@ -183,7 +183,7 @@ export class Device {
    *  session resumes when pressed; a paused held session stays paused until press). */
   async switchTimer(timerId: string): Promise<SlotView> {
     const slot = await this.store.getSlot();
-    if (!slot.cardId) return this.view();
+    if (!slot.cardId || slot.locked) return this.view();
     const target = await this.store.getTimer(timerId);
     if (!target || target.cardId !== slot.cardId) return this.view(); // not this card's timer
     if (slot.activeTimerId === timerId) return this.view();           // already active
@@ -205,10 +205,12 @@ export class Device {
   // ── The slot ───────────────────────────────────────────────────
 
   /** Put a card into the device. Suspends the previous card's active timer (held),
-   *  loads this card's last-used timer. */
+   *  loads this card's last-used timer. Ignored while locked: the lock holds the
+   *  card in the slot — unlock first. */
   async slot(cardId: string): Promise<SlotView> {
     await this.requireCard(cardId);
     const current = await this.store.getSlot();
+    if (current.locked) return this.view();
     if (current.cardId === cardId) return this.view();
     // Suspend the outgoing card's active timer (pause if running — kept on timer).
     await this.suspendActive(current);
@@ -227,9 +229,11 @@ export class Device {
     return this.slot(card.id);
   }
 
-  /** Remove the card from the device. Its active timer is suspended (held, not lost). */
+  /** Remove the card from the device. Its active timer is suspended (held, not lost).
+   *  Ignored while locked. */
   async eject(): Promise<SlotView> {
     const slot = await this.store.getSlot();
+    if (slot.locked) return this.view();
     await this.suspendActive(slot);
     await this.store.setSlot({ cardId: null, activeTimerId: null, locked: false });
     return this.view();

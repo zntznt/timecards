@@ -24,7 +24,7 @@
       <div class="pr-deck">
         <span class="pr-badge">TIME<b>CARDS</b> <em class="jp">タイムカード ・ TC-580</em></span>
         <span class="pr-cluster">
-          <button id="print-report" class="pr-key" title="print the activity report">REPORT</button>
+          <button id="print-report" class="pr-key primary" title="print the activity report">REPORT</button>
           <button id="print-settings" class="pr-key alt" title="print the settings sheet">SETUP</button>
           <span class="pr-power" title="power"></span>
         </span>
@@ -67,7 +67,7 @@
 
         <div class="p-code"></div>
         <div class="p-foot">THANK YOU ・ ありがとう</div>
-        <div class="p-nav"><button type="button" class="p-btn close" data-cut>✂ CUT</button></div>
+        <button type="button" class="p-end" data-cut title="tear the receipt off">— ✂ — — — — — — — — — — — —</button>
       </div>
 
       <!-- THE SETTINGS SHEET: the settings print too — a form ON the paper. -->
@@ -88,8 +88,8 @@
           <div class="p-nav">
             <button type="button" id="sb-clear" class="p-btn">USE LOCAL ONLY</button>
             <button type="submit" class="p-btn accent">SAVE &amp; RELOAD</button>
-            <button type="button" class="p-btn close" data-cut>✂ CUT</button>
           </div>
+          <button type="button" class="p-end" data-cut title="tear the sheet off">— ✂ — — — — — — — — — — — —</button>
         </form>
       </div>
     </header>
@@ -145,6 +145,7 @@
       <div id="timers" class="rack-area" hidden>
         <div class="slot-label">TIMERS ・ タイマー
           <button id="add-timer" class="rack-add" title="add a timer">+ ADD</button>
+          <span id="rack-count" class="rack-count">00 / 10</span>
         </div>
         <ul id="timer-list" class="rack"></ul>
       </div>
@@ -158,7 +159,7 @@
     <section id="deck" class="binder">
       <div class="deck-head">
         <h2 class="deck-title">CARD BINDER <span class="jp">カードバインダー</span></h2>
-        <button id="add-card" class="deck-add">+ NEW CARD</button>
+        <span id="deck-count" class="deck-count"></span>
       </div>
       <div class="binder__page">
         <ul id="card-list" class="binder__row"></ul>

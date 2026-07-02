@@ -48,7 +48,6 @@ const elTimers = $("timers");
 const elTimerList = $("timer-list");
 const elAddTimer = $<HTMLButtonElement>("add-timer");
 const elList = $("card-list");
-const elAdd = $<HTMLButtonElement>("add-card");
 const elCardEditor = $<HTMLDialogElement>("card-editor");
 const elTimerEditor = $<HTMLDialogElement>("timer-editor");
 
@@ -71,7 +70,8 @@ function setLamps(state: string, locked: boolean, alarmStyle?: string) {
   on("lamp-run", state === "running", "●RUN", "○RUN");
   on("lamp-pause", state === "paused", "●PAUSE", "○PAUSE");
   on("lamp-done", state === "finished", "●DONE", "○DONE");
-  const alarmTxt = alarmStyle === "blip" ? "ALARM·BLIP" : alarmStyle === "silent" ? "ALARM·OFF" : "♪ALARM";
+  // the lamp names the alarm STYLE, like the mock's ♪CHIME
+  const alarmTxt = alarmStyle === "blip" ? "♪BLIP" : alarmStyle === "silent" ? "ALARM OFF" : "♪CHIME";
   on("lamp-alarm", state === "finished" && alarmStyle !== "silent", alarmTxt, alarmTxt);
   on("lamp-lock", locked, "🔒LOCK", "○LOCK");
 }
@@ -116,6 +116,8 @@ function noiseClick(dur = 0.03, gain = 0.25) {
   n.connect(f).connect(g).connect(c.destination); n.start();
 }
 const sndClick = () => { noiseClick(0.025, 0.22); tone(220, 0.04, "square", 0.12); };
+const sndThunk = () => { tone(150, 0.16, "sine", 0.3, 60); noiseClick(0.04, 0.15); };   // card insert
+const sndEject = () => tone(90, 0.2, "sine", 0.25, 200);
 function sndPrint() { // dot-matrix printer chatter
   let t = 0;
   const iv = setInterval(() => {
@@ -165,10 +167,10 @@ async function renderDevice() {
   setLamps(v.state, v.locked, v.alarmStyle);
 
   if (v.state === "empty") {
-    elCardName.textContent = "no card"; elCardName.classList.add("empty");
-    elTimerName.textContent = "";
-    setReadout("00:00");
-    elSub.textContent = "slot a card from your binder to begin";
+    elCardName.textContent = "— NO CARD —"; elCardName.classList.add("empty");
+    elTimerName.textContent = "—";
+    setReadout("--:--");
+    elSub.textContent = "⏏ ejected ・ insert a card";
     elBigLabel.textContent = "●"; elBigWord.textContent = "—";
     elBig.disabled = true; elStop.disabled = elFinish.disabled = elReset.disabled = elEject.disabled = true;
     elTimers.hidden = true;
@@ -189,7 +191,9 @@ async function renderDevice() {
     elBig.disabled = true; elStop.disabled = elFinish.disabled = elReset.disabled = true;
     return;
   }
-  elTimerName.textContent = v.timer.name;
+  // The LCD's mode line reads the direction of time, like the mock ("COUNTDOWN ▼");
+  // the active timer's NAME lives on the lit rack row below.
+  elTimerName.innerHTML = v.timer.mode === "down" ? "COUNTDOWN <b>▼</b>" : "STOPWATCH <b>▲</b>";
   // When finished, the big button stays active and REPEATS the round (press()).
   elBig.disabled = v.locked;
 
@@ -209,8 +213,8 @@ async function renderDevice() {
   elReset.disabled = v.locked || !hasRun;
 
   if (v.state === "ready") { elSub.textContent = "press to start"; }
-  else if (v.state === "running") { elSub.textContent = v.mode === "down" ? "counting down…" : "tracking…"; }
-  else if (v.state === "paused") { elSub.textContent = "paused: press to resume · finish saves · reset discards"; }
+  else if (v.state === "running") { elSub.textContent = v.mode === "down" ? "▾ counting down" : "▴ counting up"; }
+  else if (v.state === "paused") { elSub.textContent = "❚❚ paused"; }
   else if (v.state === "finished") {
     elSub.textContent = "time's up, round saved · press ↻ to repeat · reset to clear";
     const key = v.timer.id + ":" + (v.timer.liveSession?.id ?? "");
@@ -225,6 +229,7 @@ function renderTimerList(v: SlotView) {
   elTimerList.innerHTML = "";
   elAddTimer.disabled = v.timers.length >= MAX_TIMERS;
   elAddTimer.title = elAddTimer.disabled ? `max ${MAX_TIMERS} timers` : "add a timer";
+  $("rack-count").textContent = `${String(v.timers.length).padStart(2, "0")} / ${MAX_TIMERS}`;
   if (v.timers.length === 0) {
     const li = document.createElement("li");
     li.className = "timers-empty";
@@ -280,28 +285,38 @@ const el = (tag: string, cls: string, text?: string) => {
   return e;
 };
 
+const elBinderPage = document.querySelector(".binder__page") as HTMLElement;
+
+// fill the bench remainder with EMPTY welded sleeves so the page reads as a real
+// binder page with open pockets; the LAST empty sleeve is the "+ add" one (the mock's
+// card-creation entry point).
+function fillEmptySleeves() {
+  elList.querySelectorAll(".pocket--empty").forEach(p => p.remove());
+  const POCKET_W = 262;
+  const realCount = elList.querySelectorAll(".pocket").length;
+  const fit = Math.ceil(elBinderPage.clientWidth / POCKET_W) + 1;
+  const need = Math.max(1, fit - realCount);
+  for (let i = 0; i < need; i++) {
+    const empty = el("li", "pocket pocket--empty" + (i === need - 1 ? " pocket--add" : ""));
+    empty.append(el("span", "pocket__ring"), el("span", "pocket__weld-b"), el("span", "pocket__lip"));
+    if (i === need - 1) { empty.title = "new card"; empty.onclick = () => { sndClick(); openCardEditor(null); }; }
+    elList.appendChild(empty);
+  }
+}
+window.addEventListener("resize", fillEmptySleeves);
+
 async function renderDeck() {
   const cards = await dev.listCards();
   const active = (await dev.view()).card?.id ?? null;
   const { sessions, now } = await dev.statsData();
+  // a card portaled to <body> mid-gesture belongs to the OLD render — clear it
+  document.querySelectorAll("body > .card").forEach(c => c.remove());
   elList.innerHTML = "";
-  if (cards.length === 0) {
-    elList.appendChild(el("li", "empty-deck", "empty binder ・ add a card"));
-  }
+  $("deck-count").textContent = `${cards.length} CARD${cards.length === 1 ? "" : "S"}`;
   for (let i = 0; i < cards.length; i++) {
     elList.appendChild(await cardItem(cards[i], active, i, sessions, now));
   }
-  // the "+" sleeve is the card-creation entry point; empty sleeves fill the page
-  // so it reads as a real binder sheet
-  const add = el("li", "pocket pocket--add");
-  add.title = "new card";
-  add.onclick = () => openCardEditor(null);
-  elList.appendChild(add);
-  for (let n = cards.length + 1; n < 3; n++) {
-    const sleeve = el("li", "pocket pocket--empty");
-    sleeve.append(el("span", "pocket__ring"), el("span", "pocket__weld-b"), el("span", "pocket__lip"));
-    elList.appendChild(sleeve);
-  }
+  fillEmptySleeves();
 }
 
 async function cardItem(c: Card, active: string | null, index: number, sessions: Session[], now: number): Promise<HTMLLIElement> {
@@ -318,14 +333,17 @@ async function cardItem(c: Card, active: string | null, index: number, sessions:
   const series = (c.category ?? "SER.01").toUpperCase().slice(0, 10);
   const inUse = c.id === active;
 
-  const li = el("li", `pocket ${foilFor(c.id)}` + (inUse ? " in-use" : "") + (flippedCards.has(c.id) ? " flipped" : "")) as HTMLLIElement;
+  const li = el("li", `pocket ${foilFor(c.id)}` + (inUse ? " in-use" : "")) as HTMLLIElement;
   li.append(el("span", "pocket__ring"), el("span", "pocket__weld-b"), el("span", "pocket__lip"));
 
   // the pocket tab: SLOT inserts; the slotted pocket wears IN USE (mock review U14/D4)
   const tab = el("button", "pocket-tab", inUse ? "IN USE ・ 使用中" : "SLOT ・ 挿入") as HTMLButtonElement;
   tab.disabled = inUse;
-  tab.onclick = async (e) => { e.stopPropagation(); if (!inUse) { await dev.slot(c.id); await renderAll(); } };
+  tab.onclick = async (e) => { e.stopPropagation(); if (!inUse) await slotCard(c.id); };
 
+  // .card = the drag/positioning wrapper (portaled to <body> mid-gesture, like the mock)
+  const card = el("div", "card" + (flippedCards.has(c.id) ? " flipped resting" : ""));
+  card.dataset.cardId = c.id;
   const card3d = el("div", "card-3d");
   card3d.style.setProperty("--cat", c.color || "#6f7457");
 
@@ -401,25 +419,194 @@ async function cardItem(c: Card, active: string | null, index: number, sessions:
   };
   actions.append(edit, del);
 
-  // tap the card = turn it over (a physical sticker, not a button)
-  li.onclick = () => {
-    if (flippedCards.has(c.id)) flippedCards.delete(c.id); else flippedCards.add(c.id);
-    li.classList.toggle("flipped");
-    sndFlip();
-  };
-  li.append(tab, card3d, actions);
+  // taps and drags on the card are handled by the unified pointer gesture (below)
+  card.appendChild(card3d);
+  li.append(tab, card, actions);
   return li;
 }
 
 async function renderAll() { await renderDevice(); await renderDeck(); }
 
-// ── device interactions ─────────────────────────────────────────
-elBig.onclick = async () => { await dev.press(); await renderAll(); };
-elStop.onclick = async () => { await dev.stop(); await renderAll(); };          // freeze & keep
-elFinish.onclick = async () => { alarmedFor = null; await dev.finish(); await renderAll(); }; // bank to history
-elReset.onclick = async () => { alarmedFor = null; await dev.reset(); await renderAll(); }; // discard
-elEject.onclick = async () => { await dev.eject(); await renderAll(); };
-elLock.onclick = async () => { await dev.lock(); await renderDevice(); };
+/** Slot a card into the device: thunk + the LCD wakes with a flicker (the mock's insert).
+ *  No card may be left showing its reverse or lifted out of its pocket. */
+async function slotCard(cardId: string) {
+  document.querySelectorAll<HTMLElement>(".card.flipped, .card.airborne, .card.resting").forEach(resetCard);
+  flippedCards.clear();
+  sndThunk();
+  await dev.slot(cardId);
+  await renderAll();
+  const lcd = document.querySelector(".lcd")!;
+  lcd.classList.remove("waking"); void (lcd as HTMLElement).offsetWidth; lcd.classList.add("waking");
+}
+
+// ── CARD GESTURES (the mock's, faithfully): a tap FLIPS the card over in a
+// three-beat lift→turn→settle; a mostly-UPWARD drag picks it up to drop on the
+// device; a horizontal move is left to the bench's native scroll. ──────────────
+const LIFT_GAP = 12;   // px of daylight above the binder while flipping
+const elBinder = $("deck");
+
+// REVIEW U2/U3: never trust transitionend as the only clock — a skipped or canceled
+// transition (reduced motion, interrupt) never fires it. Race a timeout.
+function onTopEnd(card: HTMLElement, fn: () => void) {
+  let done = false;
+  const go = () => { if (!done) { done = true; card.removeEventListener("transitionend", h); fn(); } };
+  const h = (e: TransitionEvent) => { if (e.target === card && e.propertyName === "top") go(); };
+  card.addEventListener("transitionend", h);
+  setTimeout(go, 320);
+}
+function onFlipEnd(card: HTMLElement, fn: () => void) {
+  let done = false;
+  const go = () => { if (!done) { done = true; fn(); } };
+  card.querySelector(".card-3d")!.addEventListener("transitionend", go, { once: true });
+  setTimeout(go, 380);
+}
+
+// pin the card at its on-screen spot in viewport-fixed coords. PORTAL to <body> first:
+// the binder row's perspective forms a containing block that would trap position:fixed.
+function pin(card: HTMLElement): DOMRect {
+  const pocket = card.closest(".pocket") as HTMLElement;
+  const r = card.getBoundingClientRect();
+  (card as any)._homePocket = pocket;
+  pocket.classList.add("bn-lent");              // hold the sleeve open while the card is away
+  card.classList.add("airborne");
+  card.style.left = r.left + "px";
+  card.style.width = r.width + "px";
+  card.style.top = r.top + "px";
+  document.body.appendChild(card);
+  void card.offsetWidth;                        // flush layout so the next `top` animates
+  return r;
+}
+function unpin(card: HTMLElement) {
+  card.classList.remove("airborne");
+  card.style.left = card.style.width = card.style.top = "";
+  const home = (card as any)._homePocket as HTMLElement | null;
+  if (home) {
+    home.classList.remove("bn-lent");
+    home.appendChild(card);
+    (card as any)._homePocket = null;
+  }
+}
+function restInPocket(card: HTMLElement) { unpin(card); card.classList.add("resting"); }
+function resetCard(card: HTMLElement) {
+  card.classList.remove("flipped", "flipping", "dragging", "resting");
+  if (card.dataset.cardId) flippedCards.delete(card.dataset.cardId);
+  delete card.dataset.busy;
+  if (card.classList.contains("airborne") || (card as any)._homePocket) unpin(card);
+  else {
+    card.closest(".pocket")?.classList.remove("bn-lent");
+    card.style.left = card.style.width = card.style.top = "";
+  }
+}
+
+function flipCard(card: HTMLElement) {
+  if (card.dataset.busy) return;
+  const toBack = !card.classList.contains("flipped");
+  card.dataset.busy = "1";
+  elList.classList.add("cards--flipping");
+  const pocket = card.closest(".pocket") as HTMLElement;
+  card.classList.remove("resting");
+  const r = pin(card);
+  const liftTop = elBinder.getBoundingClientRect().top - r.height - LIFT_GAP;
+  const id = card.dataset.cardId!;
+  const settle = (after: () => void) => {
+    card.style.top = (pocket.getBoundingClientRect().top + 6) + "px";
+    onTopEnd(card, () => { after(); delete card.dataset.busy; elList.classList.remove("cards--flipping"); });
+  };
+  requestAnimationFrame(() => { card.style.top = liftTop + "px"; });   // beat 1: lift out
+  onTopEnd(card, () => {
+    sndFlip();                                                          // beat 2: flip mid-air
+    card.classList.toggle("flipped", toBack);
+    if (toBack) flippedCards.add(id); else flippedCards.delete(id);
+    onFlipEnd(card, () => {
+      settle(() => { if (toBack) restInPocket(card); else unpin(card); });   // beat 3: settle
+    });
+  });
+}
+
+// UNIFIED POINTER DRAG — touch AND mouse. Press that moves mostly UP = pick the card
+// up; mostly horizontal = bench scroll; barely moves = tap → flip.
+const DRAG_THRESH = 8;
+let drag: { card: HTMLElement; startX: number; startY: number; pointerId: number;
+            active: boolean; moved: boolean; offX?: number; offY?: number } | null = null;
+
+document.addEventListener("pointerdown", (e) => {
+  const card = (e.target as HTMLElement).closest(".card") as HTMLElement | null;
+  if (!card || e.button > 0) return;
+  drag = { card, startX: e.clientX, startY: e.clientY, pointerId: e.pointerId, active: false, moved: false };
+});
+document.addEventListener("pointermove", (e) => {
+  if (!drag || e.pointerId !== drag.pointerId) return;
+  const dx = e.clientX - drag.startX, dy = e.clientY - drag.startY;
+  if (!drag.active) {
+    if (Math.hypot(dx, dy) <= DRAG_THRESH) return;
+    drag.moved = true;
+    if (Math.abs(dx) > Math.abs(dy)) { drag = null; return; }   // horizontal → bench scroll
+    startCardDrag(e);
+  }
+  if (drag?.active) { e.preventDefault(); moveCardTo(e.clientX, e.clientY); }
+}, { passive: false });
+document.addEventListener("pointerup", async (e) => {
+  if (!drag || e.pointerId !== drag.pointerId) return;
+  const d = drag; drag = null;
+  if (d.active) {
+    const id = d.card.dataset.cardId!;
+    endCardDrag(d.card);
+    if (overDevice(e.clientX, e.clientY)) await slotCard(id);
+  } else if (!d.moved) {
+    flipCard(d.card);                                            // a tap → flip
+  }
+});
+document.addEventListener("pointercancel", () => {
+  if (drag?.active) endCardDrag(drag.card);
+  drag = null;
+});
+
+function startCardDrag(e: PointerEvent) {
+  const card = drag!.card;
+  resetCard(card);                     // snap to front-up, un-portal any flip state
+  drag!.active = true;
+  const r = card.getBoundingClientRect();
+  drag!.offX = e.clientX - r.left; drag!.offY = e.clientY - r.top;
+  (card as any)._dragHome = card.closest(".pocket");
+  (card as any)._dragHome?.classList.add("bn-lent");
+  card.style.width = r.width + "px";
+  card.classList.add("dragging");
+  document.body.appendChild(card);
+  try { (card as any).setPointerCapture?.(e.pointerId); } catch {}
+  moveCardTo(e.clientX, e.clientY);
+}
+function moveCardTo(x: number, y: number) {
+  drag!.card.style.left = (x - drag!.offX!) + "px";
+  drag!.card.style.top = (y - drag!.offY!) + "px";
+}
+// the WHOLE device is the drop zone — drop a card anywhere on it to load it
+function overDevice(x: number, y: number): boolean {
+  const r = elDevice.getBoundingClientRect();
+  return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+}
+function endCardDrag(card: HTMLElement) {
+  card.classList.remove("dragging");
+  card.style.left = card.style.width = card.style.top = "";
+  const home = (card as any)._dragHome as HTMLElement | null;
+  home?.classList.remove("bn-lent");
+  home?.appendChild(card);
+  (card as any)._dragHome = null;
+}
+// a card mid-FLIGHT is position:fixed; keep it aligned to its pocket if the bench scrolls
+elBinderPage.addEventListener("scroll", () => {
+  document.querySelectorAll<HTMLElement>(".card.airborne").forEach(card => {
+    const home = (card as any)._homePocket as HTMLElement | null;
+    if (home) card.style.left = (home.getBoundingClientRect().left + 6) + "px";
+  });
+}, { passive: true });
+
+// ── device interactions (each key clicks like the mock's) ───────
+elBig.onclick = async () => { sndClick(); await dev.press(); await renderAll(); };
+elStop.onclick = async () => { sndClick(); await dev.stop(); await renderAll(); };          // freeze & keep
+elFinish.onclick = async () => { sndClick(); alarmedFor = null; await dev.finish(); await renderAll(); }; // bank to history
+elReset.onclick = async () => { sndClick(); alarmedFor = null; await dev.reset(); await renderAll(); }; // discard
+elEject.onclick = async () => { sndEject(); await dev.eject(); await renderAll(); };
+elLock.onclick = async () => { sndClick(); await dev.lock(); await renderDevice(); };
 
 document.addEventListener("keydown", (e) => {
   if (e.code === "Space" && !(e.target instanceof HTMLInputElement) &&
@@ -430,7 +617,6 @@ document.addEventListener("keydown", (e) => {
 
 // ── card editor ─────────────────────────────────────────────────
 let editingCardId: string | null = null;
-elAdd.onclick = () => openCardEditor(null);
 
 function openCardEditor(card: Card | null) {
   editingCardId = card?.id ?? null;
@@ -669,19 +855,16 @@ async function renderStats() {
   $("s-longest").textContent = String(st.longest);
   $("s-active").textContent = String(st.activeDays);
 
-  // Day chart.
+  // Day chart — the mock receipt's 14 vertical dotted-ink bars, today in amber.
   const chart = $("s-chart"); chart.innerHTML = "";
   const days = Stats.byDay(sessions, now, 14);
   const maxDay = Math.max(1, ...days.map(d => d.ms));
   const todayKey = days[days.length - 1].day;
   for (const d of days) {
-    const row = document.createElement("div");
-    row.className = "chart-row" + (d.day === todayKey ? " today" : "");
-    const label = d.day.slice(5).replace("-", "/");
-    row.innerHTML = `<span class="c-day">${label}</span>` +
-      `<span class="chart-bar"><span style="width:${Math.round((d.ms / maxDay) * 100)}%"></span></span>` +
-      `<span class="c-val">${d.ms ? shortDur(d.ms) : ""}</span>`;
-    chart.appendChild(row);
+    const bar = document.createElement("i");
+    bar.style.height = `${Math.round((d.ms / maxDay) * 100)}%`;
+    if (d.day === todayKey) bar.className = "hot";
+    chart.appendChild(bar);
   }
 
   // Breakdown by card → timer.

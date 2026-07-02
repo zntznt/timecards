@@ -66,11 +66,14 @@ body::after {
 }
 .scene {
   width: 100%;
+  min-height: 100vh;
   display: flex; flex-direction: column; gap: 28px;
-  padding: 0 16px 48px;
+  padding: 0 16px;
 }
-/* device view: the appliance centered, the binder bench full-bleed below it */
-#view-device { display: flex; flex-direction: column; gap: 28px; }
+/* device view: the appliance centered; the binder bench hugs the BOTTOM edge of the
+   desk (its squared bottom corners end the page flush, like the mock) */
+#view-device { flex: 1 1 auto; display: flex; flex-direction: column; gap: 28px; }
+#view-device .binder { margin-top: auto; }
 .jp { font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 500; }
 button { font-family: inherit; }
 

@@ -111,14 +111,17 @@ stopwatch for one session without changing the card.
 When a countdown finishes, interfaces play the card's alarm:
 - **chime** — three rising tones (default).
 - **blip** — one short tone.
+- **digital** — a digital-watch double beep-beep.
+- **bell** — a struck bell with a long metallic decay.
+- **melody** — a short appliance melody (the rice-cooker idiom).
 - **silent** — no sound; the visual pulse still happens.
 
 `SlotView.alarmStyle` carries the resolved style (card's, or the `DEFAULT_ALARM`
 fallback). The web app synthesizes tones with WebAudio — no audio files to host.
 Fire the alarm **once** per finished session (track the last-alarmed session id).
-An interface may additionally re-ring a chime periodically while the finished
-state persists — the web UI does, every 5s — but never re-fire for a session
-already acknowledged.
+An interface may additionally re-ring an audible style periodically while the
+finished state persists — the web UI re-rings everything but blip, every 5s —
+but never re-fire for a session already acknowledged.
 
 ## Lock
 

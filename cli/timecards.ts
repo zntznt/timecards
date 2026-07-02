@@ -176,7 +176,7 @@ try {
   switch (cmd) {
     case "new": {
       const name = argv.shift();
-      if (!name) die(`usage: timecards new "<name>" [--category X] [--color "#abc"] [--down <dur>] [--alarm chime|blip|silent]`);
+      if (!name) die(`usage: timecards new "<name>" [--category X] [--color "#abc"] [--down <dur>] [--alarm chime|blip|digital|bell|melody|silent]`);
       const down = pullOpt("--down");
       const card = await dev.createCard(name, {
         category: pullOpt("--category"),
@@ -424,7 +424,7 @@ function printHelp() {
 
 CARDS
   new "<name>" [--category X] [--color "#abc"]   create a card (seeds a first timer)
-       [--down <dur>] [--alarm chime|blip|silent]  …make that first timer a countdown
+       [--down <dur>] [--alarm chime|blip|digital|bell|melody|silent]  …make that first timer a countdown
   cards                                          list cards (▶ = slotted)
   config <id> [--deadline YYYY-MM-DD]            card-level: deadline / streak …
          [--since|--until] [--no-deadline] [--category X] [--color #abc]

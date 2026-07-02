@@ -60,7 +60,7 @@ export interface Timer {
 
 /** Alarm behavior at countdown zero. Mirrors a physical alarm-duration switch:
  *  a real chime, a short blip, or silent (visual pulse only). */
-export type AlarmStyle = "chime" | "blip" | "silent";
+export type AlarmStyle = "chime" | "blip" | "digital" | "bell" | "melody" | "silent";
 
 /** Direction of a card's day-count. */
 export type DeadlineKind = "until" | "since";

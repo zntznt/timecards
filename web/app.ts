@@ -71,7 +71,7 @@ function setLamps(state: string, locked: boolean, alarmStyle?: string) {
   on("lamp-pause", state === "paused", "●PAUSE", "○PAUSE");
   on("lamp-done", state === "finished", "●DONE", "○DONE");
   // the lamp names the alarm STYLE, like the mock's ♪CHIME
-  const alarmTxt = alarmStyle === "blip" ? "♪BLIP" : alarmStyle === "silent" ? "ALARM OFF" : "♪CHIME";
+  const alarmTxt = ({ blip: "♪BLIP", digital: "♪DIGITAL", bell: "♪BELL", melody: "♪MELODY", silent: "ALARM OFF" } as Record<string, string>)[alarmStyle ?? ""] ?? "♪CHIME";
   on("lamp-alarm", state === "finished" && alarmStyle !== "silent", alarmTxt, alarmTxt);
   on("lamp-lock", locked, "🔒LOCK", "○LOCK");
 }
@@ -92,9 +92,32 @@ function beep(freq: number, durMs: number, when = 0) {
   osc.start(t0); osc.stop(t0 + durMs / 1000 + 0.02);
 }
 function playAlarm(style: AlarmStyle) {
-  if (style === "silent") return;
-  if (style === "blip") { beep(880, 90); return; }
-  beep(660, 180, 0); beep(880, 180, 0.2); beep(1175, 320, 0.42);
+  switch (style) {
+    case "silent": return;
+    case "blip": beep(880, 90); return;
+    case "digital":   // digital-watch double beep-beep
+      for (const w of [0, 0.15, 0.45, 0.6]) beep(2093, 60, w);
+      return;
+    case "bell": bellAlarm(); return;
+    case "melody":    // the rice-cooker idiom: a bright little arpeggio
+      [523, 659, 784, 1047, 784, 659, 523].forEach((f, i) => beep(f, 130, i * 0.15));
+      return;
+    default:          // chime — three rising tones
+      beep(660, 180, 0); beep(880, 180, 0.2); beep(1175, 320, 0.42);
+  }
+}
+// a struck bell: inharmonic partials with a long metallic decay
+function bellAlarm() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+  const c = audioCtx, t = c.currentTime;
+  const partials: Array<[number, number]> = [[1568, 0.22], [2489, 0.12], [3951, 0.06]];
+  for (const [f, g0] of partials) {
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = "sine"; o.frequency.value = f;
+    g.gain.setValueAtTime(g0, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+    o.connect(g).connect(c.destination); o.start(t); o.stop(t + 1.25);
+  }
 }
 // ── printer sounds (from the mock): key click, dot-matrix chatter, tear ──
 function tone(freq: number, dur: number, type: OscillatorType = "square", gain = 0.18, slideTo?: number) {
@@ -116,6 +139,16 @@ function noiseClick(dur = 0.03, gain = 0.25) {
   n.connect(f).connect(g).connect(c.destination); n.start();
 }
 const sndClick = () => { noiseClick(0.025, 0.22); tone(220, 0.04, "square", 0.12); };
+const sndDome = () => { noiseClick(0.03, 0.2); tone(140, 0.08, "sine", 0.26, 90); };   // the big dome: deeper travel
+const sndTick = () => tone(1200, 0.015, "square", 0.08);                               // small ui tick (from the mock)
+function sndLatch() { // the lock: a two-stage click-CLACK
+  noiseClick(0.02, 0.2); tone(320, 0.03, "square", 0.1);
+  setTimeout(() => { noiseClick(0.025, 0.24); tone(210, 0.045, "square", 0.14); }, 80);
+}
+function sndBank() { // finish: key click + a bright "banked" confirmation tick
+  sndClick();
+  setTimeout(() => beep(1319, 90), 100);
+}
 const sndThunk = () => { tone(150, 0.16, "sine", 0.3, 60); noiseClick(0.04, 0.15); };   // card insert
 const sndEject = () => tone(90, 0.2, "sine", 0.25, 200);
 function sndPrint() { // dot-matrix printer chatter
@@ -238,8 +271,8 @@ async function renderDevice() {
     elSub.textContent = "time's up, round saved · press ↻ to repeat · reset to clear";
     const key = v.timer.id + ":" + (v.timer.liveSession?.id ?? "");
     if (alarmedFor !== key) { alarmedFor = key; lastChimeAt = Date.now(); playAlarm(v.alarmStyle); }
-    else if (v.alarmStyle === "chime" && Date.now() - lastChimeAt >= CHIME_EVERY_MS) {
-      lastChimeAt = Date.now(); playAlarm("chime"); // the tick loop re-renders while finished, so this re-begs
+    else if (v.alarmStyle !== "blip" && v.alarmStyle !== "silent" && Date.now() - lastChimeAt >= CHIME_EVERY_MS) {
+      lastChimeAt = Date.now(); playAlarm(v.alarmStyle); // the tick loop re-renders while finished, so this re-begs
     }
   }
 }
@@ -281,7 +314,7 @@ function timerRow(t: Timer, activeId: string | null): HTMLLIElement {
     e.stopPropagation();
     if (confirm(`Delete timer "${t.name}"? Its time is saved to history.`)) { await dev.deleteTimer(t.id); await renderAll(); }
   };
-  li.onclick = async () => { await dev.switchTimer(t.id); await renderAll(); };
+  li.onclick = async () => { sndTick(); await dev.switchTimer(t.id); await renderAll(); };
   li.append(led, nm, cfg, live, edit, del);
   return li;
 }
@@ -620,12 +653,12 @@ elBinderPage.addEventListener("scroll", () => {
 }, { passive: true });
 
 // ── device interactions (each key clicks like the mock's) ───────
-elBig.onclick = async () => { sndClick(); await dev.press(); await renderAll(); };
+elBig.onclick = async () => { sndDome(); await dev.press(); await renderAll(); };
 elStop.onclick = async () => { sndClick(); await dev.stop(); await renderAll(); };          // freeze & keep
-elFinish.onclick = async () => { sndClick(); alarmedFor = null; await dev.finish(); await renderAll(); }; // bank to history
+elFinish.onclick = async () => { sndBank(); alarmedFor = null; await dev.finish(); await renderAll(); }; // bank to history
 elReset.onclick = async () => { sndClick(); alarmedFor = null; await dev.reset(); await renderAll(); }; // discard
 elEject.onclick = async () => { sndEject(); await dev.eject(); await renderAll(); };
-elLock.onclick = async () => { sndClick(); await dev.lock(); await renderDevice(); };
+elLock.onclick = async () => { sndLatch(); await dev.lock(); await renderDevice(); };
 
 document.addEventListener("keydown", (e) => {
   if (e.code === "Space" && !(e.target instanceof HTMLInputElement) &&
@@ -682,6 +715,7 @@ $<HTMLFormElement>("card-form").onsubmit = async (e) => {
     const c = await dev.createCard(name, { category: category ?? undefined, color });
     if (deadline) await dev.configureCard(c.id, { deadline, deadlineKind });
     await dev.slot(c.id); // slot the new card so its timers are visible
+    setTimeout(sndThunk, 350); // ...and it lands in the device once the sheet is away
   }
   await closeEditor(elCardEditor);
   await renderAll();

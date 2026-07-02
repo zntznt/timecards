@@ -60,7 +60,7 @@ export const MAX_TIMERS = 10;
 
 /** Alarm behavior at countdown zero. Mirrors a physical alarm-duration switch:
  *  a real chime, a short blip, or silent (visual pulse only). */
-                                                     
+                                                                                     
 
 /** Direction of a card's day-count. */
                                              

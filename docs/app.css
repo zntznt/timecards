@@ -490,7 +490,7 @@ button { font-family: inherit; }
   position: relative; width: 100%; transform-style: preserve-3d;
   transition: transform 300ms cubic-bezier(.45,.05,.55,.95);
   background: var(--cat);                      /* the colored die-cut frame rotates WITH the faces */
-  border: none; border-radius: 14px; padding: 4px;
+  border: none; border-radius: 14px; padding: 6.5px;   /* the retired white border's 2.5px goes to the frame — face size unchanged */
   box-shadow:
     0 0 0 1.5px color-mix(in srgb, var(--cat) 60%, #000),
     0 8px 18px -5px rgba(60,52,30,.5),
@@ -684,21 +684,21 @@ button { font-family: inherit; }
 }
 .card-emblem::after { content: "\2726"; position: absolute; top: -3px; right: -5px; font-size: 13px;
   color: #ffe9a8; text-shadow: 0 0 5px #e3bd5c; z-index: 2; }
-.card-id { min-width: 0; position: relative; z-index: 1;
-  padding: 3px 12px 5px 8px; margin: -3px -12px -5px -8px; border-radius: 10px;
-  background: radial-gradient(120% 100% at 32% 50%, rgba(13,11,26,.6), rgba(13,11,26,.25) 62%, transparent 82%); }
+.card-id { min-width: 0; position: relative; z-index: 1; }
 .card-nm { font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 900; font-size: 21px; line-height: 1.25;
   background: linear-gradient(#ffffff, #ffe9a8 45%, #caa23e 56%, #fff7d6);
   -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;
-  -webkit-text-stroke: 1.25px #2a1d0a; paint-order: stroke fill;
-  /* embossed relief: hard light above, pressed shadow below, warm bloom */
-  text-shadow: 0 -1px 0 rgba(255,255,255,.28), 0 1px 0 rgba(0,0,0,.55),
-    0 2px 3px rgba(0,0,0,.4), 0 0 7px rgba(255,230,150,.4);
+  -webkit-text-stroke: 1.5px #241806; paint-order: stroke fill;
+  /* the keyline IS the readability: a tight dark halo hugging the stroke,
+     embossed relief, warm bloom — ink printed with the stamp, no scrim */
+  text-shadow: 0 0 2px rgba(18,10,0,.95), 0 -1px 0 rgba(255,255,255,.28),
+    0 1px 0 rgba(0,0,0,.6), 0 2px 3px rgba(0,0,0,.5), 0 0 7px rgba(255,230,150,.4);
   transform: skewX(-4deg); transform-origin: left center; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
   padding: 1px 3px 2px 1px; margin: -1px -3px -2px -1px; }
 .card-cat { font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: #ffe7b0; font-weight: 700; margin-top: 4px;
-  text-shadow: 0 1px 2px rgba(0,0,0,.6); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  text-shadow: 0 0 2px rgba(0,0,0,.95), 0 1px 1px rgba(0,0,0,.85), 0 0 4px rgba(0,0,0,.6);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* FOOT: timer chips + total on an opaque cream plate */
 .card-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px;
@@ -717,7 +717,7 @@ button { font-family: inherit; }
 
 /* ── THE MATTE BACK: pale newsprint, one-ink offset print, this card's stats ── */
 .card-back {
-  position: absolute; inset: 4px; transform: rotateY(180deg) translateZ(.01px);
+  position: absolute; inset: 6.5px; transform: rotateY(180deg) translateZ(.01px);
   background:
     radial-gradient(120% 90% at 50% 40%, #f1ead9, #e6dcc4 100%),
     repeating-linear-gradient(0deg, rgba(0,0,0,.03) 0 1px, transparent 1px 3px);

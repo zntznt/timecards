@@ -957,14 +957,15 @@ button { font-family: inherit; }
 .p-field input:focus { outline: none; background: rgba(43,42,37,.05); }
 .p-field input::placeholder { color: #b3afa2; }
 
-/* ═══════════ DETAILED REPORT: a long paged tape over the whole screen ═══════════ */
-.pr-big { position: fixed; left: 0; right: 0; top: var(--mouth-y, 96px); z-index: 200;
-  display: flex; flex-direction: column; align-items: center; pointer-events: none; }
+/* ═══════════ DETAILED REPORT: a long paged tape from the same mouth ═══════════
+   Anchored to the printer like every other paper — it scrolls WITH the page. */
+.pr-big { position: absolute; z-index: 4;
+  top: calc(100% - 12px); left: 50%; margin-left: calc(var(--paper-w) / -2);
+  width: var(--paper-w); }
 .pr-big[hidden] { display: none; }
 .pr-big-tape {
-  pointer-events: auto; position: relative; width: var(--paper-w); margin: 0 auto;
+  position: relative; width: 100%;
   padding: 26px 16px 18px;
-  max-height: calc(100vh - var(--mouth-y, 96px) - 24px); overflow-y: auto;
   background: var(--pr-paper);
   font-family: "VT323", monospace; color: var(--pr-print); font-size: 16px; line-height: 1.3;
   box-shadow: 0 22px 40px -12px rgba(30,26,16,.55), 0 0 0 1px rgba(0,0,0,.04);
@@ -977,8 +978,9 @@ button { font-family: inherit; }
   mask: linear-gradient(#000,#000) no-repeat 0 0/100% calc(100% - 13px),
         radial-gradient(var(--tooth) at 50% 100%, transparent 98%, #000) repeat-x 0 100%/18px 18px;
 }
-.pr-big-tape::before { content: ""; position: sticky; top: 0; display: block; height: 0;
-  box-shadow: 0 2px 22px 11px rgba(14,12,8,.28); }
+/* the slot lip casts a feed shadow onto the paper top, like the receipt */
+.pr-big-tape::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 24px; pointer-events: none;
+  background: linear-gradient(180deg, rgba(14,12,8,.7) 0%, rgba(14,12,8,.4) 30%, transparent 100%); }
 .pr-big.spooling .pr-big-tape { animation: pr-big-in .9s cubic-bezier(.2,.85,.3,1); }
 @keyframes pr-big-in { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 0 0 0); } }
 .pr-big.cut .pr-big-tape {

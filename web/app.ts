@@ -968,13 +968,6 @@ let paperOut: PaperKind | null = null;
 let printBusy = false;
 const paperEl = (k: PaperKind) =>
   k === "report" ? elPaperReport : k === "settings" ? elPaperSettings : elPaperDetailed;
-// the detailed tape is FIXED and emerges at the mouth's viewport Y — measure it,
-// don't hardcode it (the mock's syncMouthY)
-function syncMouthY() {
-  document.documentElement.style.setProperty("--mouth-y",
-    `${Math.round(elPrinter.getBoundingClientRect().bottom) - 12}px`);
-}
-window.addEventListener("resize", syncMouthY);
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 function randTilt(): string { // a cut sheet drifts with a small random tilt — light paper
@@ -991,7 +984,7 @@ function feedStubBack(done: () => void) {
 async function printPaper(kind: PaperKind) {
   printBusy = true;
   if (kind === "report") await renderStats();     // freeze the data onto the paper NOW
-  else if (kind === "detailed") { window.scrollTo({ top: 0 }); syncMouthY(); await renderDetailed(); }
+  else if (kind === "detailed") { window.scrollTo({ top: 0 }); await renderDetailed(); }
   else fillSettings();
   elPrinter.classList.add("printing", "paper-is-out");
   const el = paperEl(kind);

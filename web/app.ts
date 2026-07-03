@@ -200,62 +200,6 @@ let alarmedFor: string | null = null; // timerId:sessionId we've already alarmed
 let lastChimeAt = 0;                  // last time the ringing chime re-played
 const CHIME_EVERY_MS = 5_000;         // chime begs until acknowledged; blip stays a one-shot nudge
 
-// ── the device wears the slotted card: tab in the slot, accent surfaces ──
-const elCardSlot = $("card-slot");
-const elSlotCard = $("slot-card");
-let lastSlottedId: string | null = null;
-function renderSlotTab(v: SlotView) {
-  if (!v.card) {
-    elCardSlot.classList.add("empty");
-    elDevice.style.removeProperty("--card-accent");
-    lastSlottedId = null;
-    return;
-  }
-  elCardSlot.classList.remove("empty");
-  elDevice.style.setProperty("--card-accent", v.card.color || "#6f7457");
-  elSlotCard.style.setProperty("--cat", v.card.color || "#6f7457");
-  $("sc-emblem").textContent = v.card.emblem?.trim() || ([...v.card.name][0]?.toUpperCase() ?? "★");
-  $("sc-name").textContent = v.card.name;
-  $("sc-cat").textContent = v.card.category ? v.card.category.toUpperCase() : "— ・ —";
-  if (v.card.id !== lastSlottedId) {           // a fresh insert rises out of the slot
-    lastSlottedId = v.card.id;
-    elSlotCard.classList.remove("inserting"); void elSlotCard.offsetWidth;
-    elSlotCard.classList.add("inserting");
-  }
-}
-// pull the card OUT: grab the tab, drag up past the threshold, it ejects
-let pull: { startY: number; id: number } | null = null;
-elSlotCard.addEventListener("pointerdown", (e) => {
-  if (elDevice.classList.contains("is-locked")) return;   // the lock holds the card in
-  pull = { startY: e.clientY, id: e.pointerId };
-  elSlotCard.classList.add("pulling");
-  elSlotCard.style.transition = "none";
-  try { elSlotCard.setPointerCapture?.(e.pointerId); } catch {}
-});
-elSlotCard.addEventListener("pointermove", (e) => {
-  if (!pull || e.pointerId !== pull.id) return;
-  const dy = Math.max(-72, Math.min(0, e.clientY - pull.startY));
-  elSlotCard.style.transform = `translateY(${dy}px)`;
-});
-async function endPull(e: PointerEvent) {
-  if (!pull || e.pointerId !== pull.id) return;
-  const dy = e.clientY - pull.startY;
-  pull = null;
-  elSlotCard.classList.remove("pulling");
-  if (dy < -44) {                               // pulled free → eject
-    elSlotCard.style.transition = ""; elSlotCard.style.transform = "";
-    elSlotCard.classList.add("pulled");
-    sndEject();
-    await dev.eject();
-    setTimeout(async () => { elSlotCard.classList.remove("pulled"); await renderAll(); }, 260);
-  } else {                                      // not far enough → springs back
-    elSlotCard.style.transition = "transform .18s ease";
-    elSlotCard.style.transform = "";
-  }
-}
-elSlotCard.addEventListener("pointerup", endPull);
-elSlotCard.addEventListener("pointercancel", endPull);
-
 // ── render ──────────────────────────────────────────────────────
 async function renderDevice() {
   const v: SlotView = await dev.view();
@@ -272,7 +216,18 @@ async function renderDevice() {
   } else elDayCount.hidden = true;
 
   setLamps(v.state, v.locked, v.alarmStyle);
-  renderSlotTab(v);
+  // the machine acknowledges its card: backlight + collar key to its color,
+  // its emblem lights as a custom LCD segment, TODAY counts its day
+  if (v.card) {
+    elDevice.style.setProperty("--card-accent", v.card.color || "#6f7457");
+    $("lcd-emblem").textContent = v.card.emblem?.trim() || ([...v.card.name][0]?.toUpperCase() ?? "");
+    const live = (v.state === "running" || v.state === "paused" || v.state === "finished") ? v.elapsedMs : 0;
+    $("lcd-today").textContent = `TODAY ${fmtDuration((todayBanked.get(v.card.id) ?? 0) + live)}`;
+  } else {
+    elDevice.style.removeProperty("--card-accent");
+    $("lcd-emblem").textContent = "";
+    $("lcd-today").textContent = "";
+  }
   // a mode override only survives while ITS timer sits ready
   if (modeOverride && (v.state !== "ready" || v.timer?.id !== modeOverride.timerId)) modeOverride = null;
   elMode.disabled = v.locked || v.state !== "ready" || !v.timer;
@@ -387,6 +342,7 @@ function timerRow(t: Timer, activeId: string | null): HTMLLIElement {
 // Cards flip like the physical stickers they are: TAP turns a card over to its
 // documentary back (this card's stats); the pocket's SLOT tab inserts it.
 const flippedCards = new Set<string>();
+const todayBanked = new Map<string, number>();   // per-card banked ms since local midnight
 // the curated foil structures; legacy stored values alias to the nearest one
 const FOILS = ["foil-holo", "foil-gold", "foil-chrome", "foil-aurora", "foil-cracked", "foil-galaxy", "foil-refractor"];
 const FOIL_ALIAS: Record<string, string> = { prism: "holo", emerald: "aurora", violet: "holo", sunset: "gold" };
@@ -430,6 +386,13 @@ async function renderDeck() {
   const cards = await dev.listCards();
   const active = (await dev.view()).card?.id ?? null;
   const { sessions, now } = await dev.statsData();
+  const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
+  todayBanked.clear();
+  for (const sn of sessions) {
+    if (sn.startedAt >= dayStart.getTime()) {
+      todayBanked.set(sn.cardId, (todayBanked.get(sn.cardId) ?? 0) + elapsed(sn, now));
+    }
+  }
   // a card portaled to <body> mid-gesture belongs to the OLD render — clear it
   document.querySelectorAll("body > .card").forEach(c => c.remove());
   elList.innerHTML = "";

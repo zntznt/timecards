@@ -122,19 +122,6 @@
       <span class="screw tl"></span><span class="screw tr"></span>
       <span class="screw bl"></span><span class="screw br"></span>
 
-      <!-- THE HOLE: a thin opening in the device's top-right; the inserted card
-           sticks up out of it (the machine wears the card that drives it) -->
-      <div id="card-slot" class="card-slot empty">
-        <div class="slot-line"></div>
-        <div id="slot-card" class="slotted-card">
-          <span id="sc-emblem" class="sc-emblem"></span>
-          <span class="sc-id">
-            <span id="sc-name" class="sc-name jp"></span>
-            <span id="sc-cat" class="sc-no"></span>
-          </span>
-        </div>
-      </div>
-
       <div class="faceplate">
         <span class="brand">time<b>cards</b></span>
         <span class="fp-right">
@@ -146,8 +133,14 @@
       <div class="lcd-bezel">
         <div class="lcd">
           <div class="lcd-top">
-            <span id="card-name" class="lcd-card jp">no card</span>
-            <span id="timer-name" class="lcd-mode"></span>
+            <span class="lcd-card-wrap">
+              <i id="lcd-emblem" class="lcd-emblem" aria-hidden="true"></i>
+              <span id="card-name" class="lcd-card jp">no card</span>
+            </span>
+            <span class="lcd-right">
+              <span id="timer-name" class="lcd-mode"></span>
+              <span id="lcd-today" class="lcd-today"></span>
+            </span>
           </div>
           <div id="daycount" class="daycount" hidden></div>
           <div class="readout">

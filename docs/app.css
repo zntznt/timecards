@@ -181,8 +181,8 @@ button { font-family: inherit; }
 
 /* ═══════════════ THE DEVICE ═══════════════ */
 #device {
-  --card-accent: var(--shell-edge);   /* the slotted card's color; neutral when empty */
-  width: var(--device-w); max-width: 100%; margin: 16px auto 0;   /* headroom for the card in the slot */
+  --card-accent: var(--shell-lo);   /* the slotted card's color; neutral when empty */
+  width: var(--device-w); max-width: 100%; margin: 0 auto;
   background: linear-gradient(180deg, var(--shell-hi), var(--shell) 14%, var(--shell) 86%, var(--shell-lo));
   border-radius: 22px;
   padding: 16px;
@@ -230,60 +230,6 @@ button { font-family: inherit; }
   box-shadow: 0 1px 0 var(--shell-lo), inset 0 1px 3px rgba(120,70,10,.4);
 }
 
-/* ── THE HOLE: the card rises out of a thin opening in the chassis ── */
-.card-slot {
-  position: absolute;
-  top: -40px; right: 14px;
-  width: 184px; height: 88px;
-  z-index: 6;
-  display: flex; align-items: flex-end; justify-content: center;
-  overflow: hidden;            /* clips the card at the slot line — its body is inside the device */
-  pointer-events: none;
-}
-.card-slot.empty .slotted-card, .card-slot.empty .slot-line { display: none; }
-.slot-line {
-  position: absolute; left: 6px; right: 6px; bottom: 0; height: 7px; z-index: 4; border-radius: 3px;
-  background: linear-gradient(180deg, #14130f, #2a2820);
-  box-shadow: inset 0 2px 3px rgba(0,0,0,.9), 0 1px 0 var(--shell-hi);
-}
-.slotted-card {
-  --cat: var(--olive);
-  width: 90%; position: relative;
-  pointer-events: auto; cursor: grab; touch-action: none;   /* pull UP to take the card out */
-  display: flex; align-items: center; gap: 10px;
-  background: var(--cat);
-  border-radius: 9px 9px 0 0;
-  padding: 9px 11px;
-  box-shadow: 0 -3px 10px rgba(0,0,0,.35), 0 0 0 1.5px color-mix(in srgb, var(--cat) 60%, #000);
-}
-.slotted-card::before {      /* printed cardstock face */
-  content: ""; position: absolute; inset: 3px 3px 0; border-radius: 6px 6px 0 0; z-index: 0;
-  background: linear-gradient(155deg, #faf6ea, #efe7d2 70%, #e3d8bb);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.5);
-}
-.slotted-card > * { position: relative; z-index: 2; }
-.sc-emblem {
-  width: 34px; height: 34px; border-radius: 50%; flex: 0 0 auto;
-  display: flex; align-items: center; justify-content: center;
-  font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 900;
-  background: radial-gradient(circle at 38% 30%, color-mix(in srgb, var(--cat) 50%, #fff), var(--cat));
-  color: #fff6ec; font-size: 17px;
-  box-shadow: inset 0 -2px 4px rgba(0,0,0,.3), inset 0 1px 2px rgba(255,255,255,.5),
-    0 0 0 2px color-mix(in srgb, var(--cat) 45%, #fff), 0 0 0 3px var(--cat);
-}
-.sc-id { display: flex; flex-direction: column; min-width: 0; }
-.sc-name { font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 900; font-size: 16px;
-  color: var(--ink); line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sc-no { font-family: "Share Tech Mono", monospace; font-size: 9px; letter-spacing: .06em;
-  color: var(--ink-soft); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* the card slides up out of the slot lip and settles (the mock's insert) */
-@keyframes insert { 0% { transform: translateY(64px); opacity: .3; } 70% { transform: translateY(-3px); opacity: 1; } 100% { transform: translateY(0); } }
-.slotted-card.inserting { animation: insert .45s cubic-bezier(.3,1.15,.5,1); }
-.slotted-card.pulling { cursor: grabbing; }
-/* pulled free: the card leaves upward and the slot swallows the motion */
-@keyframes pull-out { to { transform: translateY(-96px); opacity: .2; } }
-.slotted-card.pulled { animation: pull-out .28s cubic-bezier(.4,0,.8,.6) forwards; }
-
 /* ── LCD ── */
 .lcd-bezel {
   margin: 0 6px 16px;
@@ -295,8 +241,9 @@ button { font-family: inherit; }
 .lcd {
   /* the backlight leans toward the slotted card's color — screens can do that */
   background: linear-gradient(180deg,
-    color-mix(in srgb, var(--lcd-bg) 86%, var(--card-accent)) 0%,
-    color-mix(in srgb, var(--lcd-bg-lo) 86%, var(--card-accent)) 100%);
+    color-mix(in srgb, var(--lcd-bg) 74%, var(--card-accent)) 0%,
+    color-mix(in srgb, var(--lcd-bg-lo) 74%, var(--card-accent)) 100%);
+  transition: background 1s ease;
   border-radius: 5px;
   padding: 14px 16px 12px;
   position: relative; overflow: hidden;
@@ -311,6 +258,16 @@ button { font-family: inherit; }
   pointer-events: none;
 }
 .lcd-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.lcd-card-wrap { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.lcd-emblem { font-style: normal; font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 900;
+  font-size: 14px; color: var(--lcd-dark); opacity: .85; flex: 0 0 auto;
+  text-shadow: 0 1px 0 rgba(255,255,255,.12); }
+.lcd-emblem:empty { display: none; }
+.lcd-right { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; min-width: 0; flex: 0 1 auto; }
+/* TODAY — this card's tracked time today, a real segment counter */
+.lcd-today { font-family: "Share Tech Mono", monospace; font-size: 10px; letter-spacing: .06em;
+  color: var(--lcd-dark); opacity: .8; white-space: nowrap; }
+.lcd-today:empty { display: none; }
 .lcd-card { font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 700; font-size: 15px;
   color: var(--lcd-dark); letter-spacing: .02em; min-width: 0; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; }
@@ -349,8 +306,8 @@ button { font-family: inherit; }
   border: none; cursor: pointer; position: relative;
   background: radial-gradient(circle at 38% 30%, var(--vermilion) 0%, var(--vermilion) 55%, var(--vermilion-lo) 100%);
   box-shadow:
-    0 0 0 5px var(--shell-lo),
-    0 0 0 6px var(--shell-edge),
+    0 0 0 5px color-mix(in srgb, var(--card-accent) 62%, var(--shell-lo)),
+    0 0 0 6px color-mix(in srgb, var(--card-accent) 35%, var(--shell-edge)),
     0 9px 0 var(--vermilion-lo),
     0 14px 18px rgba(120,30,15,.45),
     inset 0 4px 8px rgba(255,255,255,.35),
@@ -362,8 +319,8 @@ button { font-family: inherit; }
 .bigbtn:active, #device.running .bigbtn {
   transform: translateY(6px);
   box-shadow:
-    0 0 0 5px var(--shell-lo),
-    0 0 0 6px var(--shell-edge),
+    0 0 0 5px color-mix(in srgb, var(--card-accent) 62%, var(--shell-lo)),
+    0 0 0 6px color-mix(in srgb, var(--card-accent) 35%, var(--shell-edge)),
     0 3px 0 var(--vermilion-lo),
     0 6px 10px rgba(120,30,15,.4),
     inset 0 4px 8px rgba(255,255,255,.3),
@@ -1137,7 +1094,6 @@ dialog[open] .index-card { animation: ic-up .5s cubic-bezier(.2,.85,.3,1); }
 @media (prefers-reduced-motion: reduce) {
   .paper.spooling, .paper.cut, .pr-stub.feeding { animation: none; }
   .lcd.waking { animation: none; }
-  .slotted-card.inserting, .slotted-card.pulled { animation: none; }
   .card-3d { transition: opacity 1ms; }   /* flip lands instantly, no 3D turn */
   dialog[open] .index-card, .index-card.away { animation: none; }
   .card, .card.airborne { transition: none; }   /* gesture beats resolve via their timeout clocks */

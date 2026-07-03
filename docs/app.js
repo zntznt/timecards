@@ -218,15 +218,25 @@ async function renderDevice() {
   setLamps(v.state, v.locked, v.alarmStyle);
   // the machine acknowledges its card: backlight + collar key to its color,
   // its emblem lights as a custom LCD segment, TODAY counts its day
+  const ssEdge = $("ss-edge");
   if (v.card) {
     elDevice.style.setProperty("--card-accent", v.card.color || "#6f7457");
     $("lcd-emblem").textContent = v.card.emblem?.trim() || ([...v.card.name][0]?.toUpperCase() ?? "");
     const live = (v.state === "running" || v.state === "paused" || v.state === "finished") ? v.elapsedMs : 0;
     $("lcd-today").textContent = `TODAY ${fmtDuration((todayBanked.get(v.card.id) ?? 0) + live)}`;
+    ssEdge.style.setProperty("--cat", v.card.color || "#6f7457");
+    if (v.card.id !== lastSlottedId) {          // a fresh card slides in through the side
+      lastSlottedId = v.card.id;
+      ssEdge.classList.remove("inserting"); void ssEdge.offsetWidth;
+      ssEdge.classList.add("inserting");
+    }
+    ssEdge.hidden = false;
   } else {
     elDevice.style.removeProperty("--card-accent");
     $("lcd-emblem").textContent = "";
     $("lcd-today").textContent = "";
+    ssEdge.hidden = true;
+    lastSlottedId = null;
   }
   // a mode override only survives while ITS timer sits ready
   if (modeOverride && (v.state !== "ready" || v.timer?.id !== modeOverride.timerId)) modeOverride = null;
@@ -300,21 +310,28 @@ function renderTimerList(v          ) {
   elTimerList.innerHTML = "";
   $("rack-count").textContent = `${String(v.timers.length).padStart(2, "0")} / ${MAX_TIMERS}`;
   for (const t of v.timers) elTimerList.appendChild(timerRow(t, v.timer?.id ?? null));
-  // the mock's dashed + ADD TIMER row lives IN the rack — a full rack is
-  // simply 4 timer rows, no cap notice
-  if (v.timers.length < MAX_TIMERS) {
+  // a 2x2 socket panel: after the timers comes ONE dashed add socket (if room),
+  // then blank sockets fill the machine's remaining bays
+  let filled = v.timers.length;
+  if (filled < MAX_TIMERS) {
     const add = document.createElement("li");
     add.className = "timer-row add";
     add.textContent = "+ ADD TIMER";
     add.title = "add a timer";
     add.onclick = () => { if (v.card) openTimerEditor(v.card.id, null); };
     elTimerList.appendChild(add);
+    filled++;
+  }
+  for (; filled < MAX_TIMERS; filled++) {
+    elTimerList.appendChild(el("li", "timer-row socket")                 );
   }
 }
 
 function timerRow(t       , activeId               )                {
   const li = document.createElement("li");
   li.className = "timer-row" + (t.id === activeId ? " active" : "");
+  const top = document.createElement("div"); top.className = "tc-top";
+  const bot = document.createElement("div"); bot.className = "tc-bot";
   const led = document.createElement("span"); led.className = "t-led"; // lit by CSS on .active
   const nm = document.createElement("span"); nm.className = "t-nm"; nm.textContent = t.name;
   const cfg = document.createElement("span"); cfg.className = "t-cfg";
@@ -335,7 +352,9 @@ function timerRow(t       , activeId               )                {
     if (confirm(`Delete timer "${t.name}"? Its time is saved to history.`)) { await dev.deleteTimer(t.id); await renderAll(); }
   };
   li.onclick = async () => { sndTick(); await dev.switchTimer(t.id); await renderAll(); };
-  li.append(led, nm, cfg, live, edit, del);
+  top.append(led, nm, live);
+  bot.append(cfg, edit, del);
+  li.append(top, bot);
   return li;
 }
 
@@ -343,6 +362,7 @@ function timerRow(t       , activeId               )                {
 // documentary back (this card's stats); the pocket's SLOT tab inserts it.
 const flippedCards = new Set        ();
 const todayBanked = new Map                ();   // per-card banked ms since local midnight
+let lastSlottedId                = null;         // to animate the side-slot on a fresh insert
 // the curated foil structures; legacy stored values alias to the nearest one
 const FOILS = ["foil-holo", "foil-gold", "foil-chrome", "foil-aurora", "foil-cracked", "foil-galaxy", "foil-refractor"];
 const FOIL_ALIAS                         = { prism: "holo", emerald: "aurora", violet: "holo", sunset: "gold" };
@@ -658,6 +678,7 @@ document.addEventListener("pointercancel", () => {
 });
 
 function startCardDrag(e              ) {
+  document.body.classList.add("card-dragging");   // the side slit lights as the drop hint
   const card = drag .card;
   resetCard(card);                     // snap to front-up, un-portal any flip state
   drag .active = true;
@@ -681,6 +702,7 @@ function overDevice(x        , y        )          {
   return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
 }
 function endCardDrag(card             ) {
+  document.body.classList.remove("card-dragging");
   card.classList.remove("dragging");
   card.style.left = card.style.width = card.style.top = "";
   const home = (card       )._dragHome                      ;

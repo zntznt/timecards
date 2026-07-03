@@ -175,9 +175,15 @@
       <!-- TIMER RACK: the slotted card's timers. Tap to switch (suspends/resumes). -->
       <div id="timers" class="rack-area" hidden>
         <div class="slot-label">TIMERS ・ タイマー
-          <span id="rack-count" class="rack-count">00 / 10</span>
+          <span id="rack-count" class="rack-count">00 / 4</span>
         </div>
         <ul id="timer-list" class="rack"></ul>
+        <!-- the card enters the machine HERE: a slit in the chassis side at rack
+             height; the seated card's edge stays visible in it -->
+        <div class="side-slot" aria-hidden="true">
+          <i class="ss-slit"></i>
+          <i id="ss-edge" class="ss-edge"></i>
+        </div>
       </div>
 
       <div class="footstamp">

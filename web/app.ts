@@ -200,38 +200,36 @@ let alarmedFor: string | null = null; // timerId:sessionId we've already alarmed
 let lastChimeAt = 0;                  // last time the ringing chime re-played
 const CHIME_EVERY_MS = 5_000;         // chime begs until acknowledged; blip stays a one-shot nudge
 
-// ── the eject lever beside the slit: pull it OUT to take the card out ──
-const elLever = $<HTMLButtonElement>("ss-lever");
-let leverPull: { startX: number; id: number } | null = null;
-elLever.addEventListener("pointerdown", (e) => {
+// ── the pull-tab at the device's bottom center: pull DOWN to take the card out ──
+const elPullTab = $<HTMLButtonElement>("pull-tab");
+let tabPull: { startY: number; id: number } | null = null;
+elPullTab.addEventListener("pointerdown", (e) => {
   if (elDevice.classList.contains("is-locked")) return;   // the lock holds the card in
-  leverPull = { startX: e.clientX, id: e.pointerId };
-  elLever.style.transition = "none";
-  try { elLever.setPointerCapture?.(e.pointerId); } catch {}
+  tabPull = { startY: e.clientY, id: e.pointerId };
+  elPullTab.style.transition = "none";
+  try { elPullTab.setPointerCapture?.(e.pointerId); } catch {}
 });
-elLever.addEventListener("pointermove", (e) => {
-  if (!leverPull || e.pointerId !== leverPull.id) return;
-  const dx = Math.max(0, Math.min(28, e.clientX - leverPull.startX));
-  elLever.style.transform = `translate(${dx}px, -50%)`;
+elPullTab.addEventListener("pointermove", (e) => {
+  if (!tabPull || e.pointerId !== tabPull.id) return;
+  const dy = Math.max(0, Math.min(30, e.clientY - tabPull.startY));
+  elPullTab.style.transform = `translate(-50%, ${dy}px)`;
 });
-async function endLeverPull(e: PointerEvent) {
-  if (!leverPull || e.pointerId !== leverPull.id) return;
-  const dx = e.clientX - leverPull.startX;
-  leverPull = null;
-  elLever.style.transition = ""; elLever.style.transform = "";
-  if (dx > 20) {                                  // thrown → the card comes out
-    elLever.classList.add("snapping");
-    setTimeout(() => elLever.classList.remove("snapping"), 240);
+async function endTabPull(e: PointerEvent) {
+  if (!tabPull || e.pointerId !== tabPull.id) return;
+  const dy = e.clientY - tabPull.startY;
+  tabPull = null;
+  elPullTab.style.transition = ""; elPullTab.style.transform = "";
+  if (dy > 20) {                                  // pulled → the card comes out
     sndEject();
     await dev.eject();
     await renderAll();
   } else {
-    elLever.style.transition = "transform .15s ease";
-    requestAnimationFrame(() => { elLever.style.transform = ""; });
+    elPullTab.style.transition = "transform .15s ease";
+    requestAnimationFrame(() => { elPullTab.style.transform = ""; });
   }
 }
-elLever.addEventListener("pointerup", endLeverPull);
-elLever.addEventListener("pointercancel", endLeverPull);
+elPullTab.addEventListener("pointerup", endTabPull);
+elPullTab.addEventListener("pointercancel", endTabPull);
 
 // ── render ──────────────────────────────────────────────────────
 async function renderDevice() {
@@ -251,21 +249,17 @@ async function renderDevice() {
   setLamps(v.state, v.locked, v.alarmStyle);
   // the machine acknowledges its card: backlight + collar key to its color,
   // its emblem lights as a custom LCD segment, TODAY counts its day
-  const slit = $("ss-slit");
   if (v.card) {
     elDevice.style.setProperty("--card-accent", v.card.color || "#6f7457");
     $("lcd-emblem").textContent = v.card.emblem?.trim() || ([...v.card.name][0]?.toUpperCase() ?? "");
     const live = (v.state === "running" || v.state === "paused" || v.state === "finished") ? v.elapsedMs : 0;
     $("lcd-today").textContent = `TODAY ${fmtDuration((todayBanked.get(v.card.id) ?? 0) + live)}`;
-    slit.style.setProperty("--cat", v.card.color || "#6f7457");
-    slit.classList.add("occupied");             // light escapes the groove: a card is seated
-    elLever.hidden = false;
+    elPullTab.hidden = false;
   } else {
     elDevice.style.removeProperty("--card-accent");
     $("lcd-emblem").textContent = "";
     $("lcd-today").textContent = "";
-    slit.classList.remove("occupied");
-    elLever.hidden = true;
+    elPullTab.hidden = true;
   }
   // a mode override only survives while ITS timer sits ready
   if (modeOverride && (v.state !== "ready" || v.timer?.id !== modeOverride.timerId)) modeOverride = null;
@@ -706,7 +700,6 @@ document.addEventListener("pointercancel", () => {
 });
 
 function startCardDrag(e: PointerEvent) {
-  document.body.classList.add("card-dragging");   // the side slit lights as the drop hint
   const card = drag!.card;
   resetCard(card);                     // snap to front-up, un-portal any flip state
   drag!.active = true;
@@ -730,7 +723,6 @@ function overDevice(x: number, y: number): boolean {
   return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
 }
 function endCardDrag(card: HTMLElement) {
-  document.body.classList.remove("card-dragging");
   card.classList.remove("dragging");
   card.style.left = card.style.width = card.style.top = "";
   const home = (card as any)._dragHome as HTMLElement | null;

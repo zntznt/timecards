@@ -182,9 +182,17 @@ button { font-family: inherit; }
 
 /* ═══════════════ THE DEVICE ═══════════════ */
 #device {
-  --card-accent: var(--shell-lo);   /* the slotted card's color; neutral when empty */
+  /* the LCD takes the card's HUE at screen lightness — a backlight changes color,
+     it doesn't go dim (dark card colors must not kill readability) */
+  --accent-lcd: color-mix(in srgb, var(--lcd-bg) 80%, var(--card-accent, var(--lcd-bg)));
+  --accent-lcd-lo: color-mix(in srgb, var(--lcd-bg-lo) 80%, var(--card-accent, var(--lcd-bg-lo)));
   width: var(--device-w); max-width: 100%; margin: 0 auto;
-  background: linear-gradient(180deg, var(--shell-hi), var(--shell) 14%, var(--shell) 86%, var(--shell-lo));
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--shell-hi) 86%, var(--card-accent, var(--shell-hi))),
+    color-mix(in srgb, var(--shell) 84%, var(--card-accent, var(--shell))) 14%,
+    color-mix(in srgb, var(--shell) 84%, var(--card-accent, var(--shell))) 86%,
+    color-mix(in srgb, var(--shell-lo) 84%, var(--card-accent, var(--shell-lo))));
+  transition: background 1s ease;
   border-radius: 22px;
   padding: 16px;
   position: relative;
@@ -194,6 +202,10 @@ button { font-family: inherit; }
     0 24px 40px -12px rgba(60,52,30,.55),
     0 4px 8px rgba(0,0,0,.2);
   border: 1px solid var(--shell-edge);
+}
+@supports (color: oklch(from red l c h)) {
+  #device { --accent-lcd: oklch(from var(--card-accent, var(--lcd-bg)) 0.70 min(c, 0.085) h);
+            --accent-lcd-lo: oklch(from var(--card-accent, var(--lcd-bg)) 0.63 min(c, 0.085) h); }
 }
 .screw { position: absolute; width: 11px; height: 11px; border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, #d9d2bd, #9c916f);
@@ -206,7 +218,7 @@ button { font-family: inherit; }
   background: repeating-linear-gradient(90deg, var(--metal) 0 2px, var(--metal-hi) 2px 3px);
   border-radius: 12px 12px 4px 4px;
   border: 1px solid var(--shell-edge);
-  border-bottom: 2px solid color-mix(in srgb, var(--card-accent) 75%, var(--shell-edge));   /* snap-on trim keyed to the card */
+  border-bottom: 2px solid color-mix(in srgb, var(--card-accent, var(--shell-edge)) 75%, var(--shell-edge));   /* snap-on trim keyed to the card */
   padding: 9px 14px;
   display: flex; align-items: center; justify-content: space-between;
   box-shadow: 0 1px 0 var(--metal-hi) inset, 0 2px 4px rgba(0,0,0,.18);
@@ -241,9 +253,7 @@ button { font-family: inherit; }
 }
 .lcd {
   /* the backlight leans toward the slotted card's color — screens can do that */
-  background: linear-gradient(180deg,
-    color-mix(in srgb, var(--lcd-bg) 74%, var(--card-accent)) 0%,
-    color-mix(in srgb, var(--lcd-bg-lo) 74%, var(--card-accent)) 100%);
+  background: linear-gradient(180deg, var(--accent-lcd) 0%, var(--accent-lcd-lo) 100%);
   transition: background 1s ease;
   border-radius: 5px;
   padding: 14px 16px 12px;
@@ -307,8 +317,8 @@ button { font-family: inherit; }
   border: none; cursor: pointer; position: relative;
   background: radial-gradient(circle at 38% 30%, var(--vermilion) 0%, var(--vermilion) 55%, var(--vermilion-lo) 100%);
   box-shadow:
-    0 0 0 5px color-mix(in srgb, var(--card-accent) 62%, var(--shell-lo)),
-    0 0 0 6px color-mix(in srgb, var(--card-accent) 35%, var(--shell-edge)),
+    0 0 0 5px color-mix(in srgb, var(--card-accent, var(--shell-lo)) 62%, var(--shell-lo)),
+    0 0 0 6px color-mix(in srgb, var(--card-accent, var(--shell-edge)) 35%, var(--shell-edge)),
     0 9px 0 var(--vermilion-lo),
     0 14px 18px rgba(120,30,15,.45),
     inset 0 4px 8px rgba(255,255,255,.35),
@@ -320,8 +330,8 @@ button { font-family: inherit; }
 .bigbtn:active, #device.running .bigbtn {
   transform: translateY(6px);
   box-shadow:
-    0 0 0 5px color-mix(in srgb, var(--card-accent) 62%, var(--shell-lo)),
-    0 0 0 6px color-mix(in srgb, var(--card-accent) 35%, var(--shell-edge)),
+    0 0 0 5px color-mix(in srgb, var(--card-accent, var(--shell-lo)) 62%, var(--shell-lo)),
+    0 0 0 6px color-mix(in srgb, var(--card-accent, var(--shell-edge)) 35%, var(--shell-edge)),
     0 3px 0 var(--vermilion-lo),
     0 6px 10px rgba(120,30,15,.4),
     inset 0 4px 8px rgba(255,255,255,.3),
@@ -412,41 +422,18 @@ button { font-family: inherit; }
   background: repeating-linear-gradient(45deg, #232219 0 6px, #2a2920 6px 12px);
   border: 1px dashed #3a392f; border-radius: 4px; }
 
-/* ── the side slot: the card enters THROUGH the chassis side, level with the
-   socket panel, and is fully swallowed. The groove lights in the card's color
-   when seated; the molded lever below it ejects. Machine parts only. ── */
-.rack-wrap { position: relative; }
-/* the slit straddles the device's outer edge */
-.ss-slit { --cat: transparent;
-  position: absolute; left: calc(100% + 18px); top: 50%; transform: translateY(-50%);
-  width: 8px; height: 100px; border-radius: 4px;
-  background: linear-gradient(90deg, #14130f, #2a2820);
-  box-shadow: inset 2px 0 3px rgba(0,0,0,.9), 1px 0 0 var(--shell-hi);
-  transition: box-shadow .25s ease; }
-/* seated card: light escapes the groove in the card's color */
-.ss-slit::after { content: ""; position: absolute; inset: 4px 2px; border-radius: 2px;
-  background: var(--cat); opacity: 0; filter: blur(.4px);
-  transition: opacity .35s ease; }
-.ss-slit.occupied::after { opacity: .9; box-shadow: 0 0 7px var(--cat); }
-body.card-dragging .ss-slit {
-  box-shadow: inset 2px 0 3px rgba(0,0,0,.9), 0 0 10px 2px rgba(232,71,42,.55), 1px 0 0 var(--shell-hi); }
-/* the eject LEVER: molded shell plastic with grip ridges, below the slit */
-.ss-lever {
-  position: absolute; left: calc(100% + 22px); top: calc(50% + 68px); transform: translateY(-50%);
-  width: 20px; height: 26px; border-radius: 0 6px 6px 0;
-  border: 1px solid var(--shell-edge); border-left: none;
-  background: linear-gradient(180deg, var(--shell-hi), #d3cab0);
-  box-shadow: 1px 2px 3px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.5);
+/* the pull-tab at the bottom center: pull down, the card comes out */
+.pull-tab {
+  position: absolute; bottom: -16px; left: 50%; transform: translateX(-50%);
+  width: 52px; height: 18px; border: none; border-radius: 0 0 10px 10px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--card-accent, var(--shell-lo)) 80%, #000) 0 2px, var(--card-accent, var(--shell-lo)) 2px);
+  box-shadow: 0 0 0 1px rgba(0,0,0,.28), 0 3px 5px rgba(0,0,0,.3), inset 0 -2px 0 rgba(255,255,255,.22);
   cursor: grab; touch-action: none; padding: 0;
-  display: flex; align-items: center; justify-content: center;
 }
-.ss-lever:active { cursor: grabbing; }
-.ss-lever[hidden] { display: none; }
-.ss-grip { width: 8px; height: 14px;
-  background: repeating-linear-gradient(180deg, var(--shell-lo) 0 2px, transparent 2px 4px); }
-/* the lever snaps home after an eject */
-@keyframes lever-home { from { transform: translate(26px, -50%); } to { transform: translate(0, -50%); } }
-.ss-lever.snapping { animation: lever-home .22s cubic-bezier(.2,1.4,.4,1); }
+.pull-tab::after { content: ""; position: absolute; left: 50%; top: 7px; transform: translateX(-50%);
+  width: 22px; height: 3px; border-radius: 2px; background: rgba(0,0,0,.28); }
+.pull-tab:active { cursor: grabbing; }
+.pull-tab[hidden] { display: none; }
 
 .footstamp { display: flex; justify-content: space-between; margin: 12px 8px 2px;
   font-size: 9px; letter-spacing: .14em; color: var(--ink-soft); opacity: .7; font-weight: 600; }
@@ -1141,7 +1128,6 @@ dialog[open] .index-card { animation: ic-up .5s cubic-bezier(.2,.85,.3,1); }
 @media (prefers-reduced-motion: reduce) {
   .paper.spooling, .paper.cut, .pr-stub.feeding { animation: none; }
   .lcd.waking { animation: none; }
-  .ss-lever.snapping { animation: none; }
   .card-3d { transition: opacity 1ms; }   /* flip lands instantly, no 3D turn */
   dialog[open] .index-card, .index-card.away { animation: none; }
   .card, .card.airborne { transition: none; }   /* gesture beats resolve via their timeout clocks */

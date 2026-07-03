@@ -254,11 +254,15 @@ async function renderDevice() {
     $("lcd-emblem").textContent = v.card.emblem?.trim() || ([...v.card.name][0]?.toUpperCase() ?? "");
     const live = (v.state === "running" || v.state === "paused" || v.state === "finished") ? v.elapsedMs : 0;
     $("lcd-today").textContent = `TODAY ${fmtDuration((todayBanked.get(v.card.id) ?? 0) + live)}`;
+    $("lcd-stars").textContent = rarityFor((allBanked.get(v.card.id) ?? 0) + live);
+    elDevice.dataset.tx = v.card.texture && TEXTURES.includes(v.card.texture) ? v.card.texture : "cosmos";
     elPullTab.hidden = false;
   } else {
     elDevice.style.removeProperty("--card-accent");
     $("lcd-emblem").textContent = "";
     $("lcd-today").textContent = "";
+    $("lcd-stars").textContent = "";
+    delete elDevice.dataset.tx;
     elPullTab.hidden = true;
   }
   // a mode override only survives while ITS timer sits ready
@@ -346,7 +350,9 @@ function renderTimerList(v          ) {
     filled++;
   }
   for (; filled < MAX_TIMERS; filled++) {
-    elTimerList.appendChild(el("li", "timer-row socket")                 );
+    const socket = el("li", "timer-row socket")                 ;
+    if (v.card) socket.dataset.emblem = v.card.emblem?.trim() || ([...v.card.name][0]?.toUpperCase() ?? "");
+    elTimerList.appendChild(socket);
   }
 }
 
@@ -385,6 +391,7 @@ function timerRow(t       , activeId               )                {
 // documentary back (this card's stats); the pocket's SLOT tab inserts it.
 const flippedCards = new Set        ();
 const todayBanked = new Map                ();   // per-card banked ms since local midnight
+const allBanked = new Map                ();     // per-card banked ms, all time
 // the curated foil structures; legacy stored values alias to the nearest one
 const FOILS = ["foil-holo", "foil-gold", "foil-chrome", "foil-aurora", "foil-cracked", "foil-galaxy", "foil-refractor"];
 const FOIL_ALIAS                         = { prism: "holo", emerald: "aurora", violet: "holo", sunset: "gold" };
@@ -429,10 +436,12 @@ async function renderDeck() {
   const active = (await dev.view()).card?.id ?? null;
   const { sessions, now } = await dev.statsData();
   const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
-  todayBanked.clear();
+  todayBanked.clear(); allBanked.clear();
   for (const sn of sessions) {
+    const ms = elapsed(sn, now);
+    allBanked.set(sn.cardId, (allBanked.get(sn.cardId) ?? 0) + ms);
     if (sn.startedAt >= dayStart.getTime()) {
-      todayBanked.set(sn.cardId, (todayBanked.get(sn.cardId) ?? 0) + elapsed(sn, now));
+      todayBanked.set(sn.cardId, (todayBanked.get(sn.cardId) ?? 0) + ms);
     }
   }
   // a card portaled to <body> mid-gesture belongs to the OLD render — clear it

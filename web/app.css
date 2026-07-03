@@ -279,6 +279,8 @@ button { font-family: inherit; }
 .lcd-today { font-family: "Share Tech Mono", monospace; font-size: 10px; letter-spacing: .06em;
   color: var(--lcd-dark); opacity: .8; white-space: nowrap; }
 .lcd-today:empty { display: none; }
+.lcd-stars { font-size: 9px; letter-spacing: 2px; color: var(--lcd-dark); opacity: .8; white-space: nowrap; }
+.lcd-stars:empty { display: none; }
 .lcd-card { font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 700; font-size: 15px;
   color: var(--lcd-dark); letter-spacing: .02em; min-width: 0; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; }
@@ -366,7 +368,8 @@ button { font-family: inherit; }
 .rack-area { margin: 16px 6px 8px; }
 .slot-label { font-size: 10px; letter-spacing: .22em; color: var(--ink-soft); font-weight: 600;
   margin-bottom: 6px; display: flex; gap: 8px; align-items: center; }
-.slot-label::before, .slot-label::after { content: ""; height: 1px; flex: 1; background: var(--shell-edge); opacity: .5; }
+.slot-label::before, .slot-label::after { content: ""; height: 1px; flex: 1;
+  background: color-mix(in srgb, var(--card-accent, var(--shell-edge)) 55%, var(--shell-edge)); opacity: .6; }
 .timer-row.add { justify-content: center; align-items: center; min-height: 52px;
   color: #8a856f; font-weight: 400; letter-spacing: .18em;
   font-size: 10px; text-transform: uppercase;
@@ -377,11 +380,25 @@ button { font-family: inherit; }
   color: var(--ink-soft); letter-spacing: .05em; }
 .rack {
   list-style: none;
-  background: linear-gradient(180deg, #25241e, #1b1a15);
+  --rack-tx: none;
+  background:
+    var(--rack-tx),
+    linear-gradient(180deg,
+      color-mix(in srgb, #25241e 78%, var(--card-accent, #25241e)),
+      color-mix(in srgb, #1b1a15 80%, var(--card-accent, #1b1a15)));
   border: 1px solid #100f0c; border-radius: 7px; padding: 6px;
   box-shadow: inset 0 3px 8px rgba(0,0,0,.7), 0 1px 0 var(--shell-hi);
   display: grid; grid-template-columns: 1fr 1fr; gap: 4px;   /* four sockets, 2x2 */
+  transition: background 1s ease;
 }
+/* the slotted card's TEXTURE is milled into the panel */
+#device[data-tx="cosmos"] .rack { --rack-tx: var(--tx-cosmos); }
+#device[data-tx="waves"] .rack { --rack-tx: var(--tx-waves); background-size: 48px 24px, 48px 24px, 48px 24px, auto; }
+#device[data-tx="rays"] .rack { --rack-tx: var(--tx-rays); }
+#device[data-tx="pin"] .rack { --rack-tx: var(--tx-pin); }
+#device[data-tx="ichimatsu"] .rack { --rack-tx: var(--tx-ichimatsu); background-size: 30px 30px, auto; }
+#device[data-tx="lattice"] .rack { --rack-tx: var(--tx-lattice); }
+#device[data-tx="dots"] .rack { --rack-tx: var(--tx-dots); background-size: 17px 17px, auto; }
 .timer-row {
   display: flex; flex-direction: column; gap: 4px; width: 100%; min-width: 0;
   font-family: "Share Tech Mono", monospace; text-align: left;
@@ -394,10 +411,15 @@ button { font-family: inherit; }
 .tc-bot { display: flex; align-items: center; gap: 6px; min-width: 0; padding-left: 16px; }
 .tc-bot .t-cfg { margin-left: 0; margin-right: auto; }
 /* a bay with nothing in it — hatched, inert */
-.timer-row.socket { cursor: default; min-height: 52px;
+.timer-row.socket { cursor: default; min-height: 52px; position: relative;
   background: repeating-linear-gradient(45deg, #1f1e18 0 6px, #24231c 6px 12px);
   border-style: solid; border-color: #14130f;
   box-shadow: inset 0 2px 5px rgba(0,0,0,.55); }
+.timer-row.socket::after { content: attr(data-emblem); position: absolute; inset: 0;
+  display: grid; place-items: center;
+  font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 900; font-size: 24px;
+  color: rgba(255,250,225,.05);
+  text-shadow: 0 1px 0 rgba(0,0,0,.5), 0 -1px 0 rgba(255,255,255,.04); }
 .timer-row.socket:hover { background: repeating-linear-gradient(45deg, #1f1e18 0 6px, #24231c 6px 12px); }
 .timer-row:hover { background: linear-gradient(180deg, #3c3b32, #302f27); }
 .t-led { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto;
@@ -408,7 +430,9 @@ button { font-family: inherit; }
 .t-live { font-size: 10px; flex: 0 0 auto; }
 .t-live.run { color: var(--vermilion); }
 .t-live.held { color: #b9a86e; }
-.timer-row.active { background: linear-gradient(180deg, #45342c, #38291f);
+.timer-row.active { background: linear-gradient(180deg,
+    color-mix(in srgb, var(--card-accent, #45342c) 34%, #221712),
+    color-mix(in srgb, var(--card-accent, #38291f) 30%, #191009));
   box-shadow: inset 0 0 0 1px var(--vermilion-lo), inset 0 0 14px rgba(232,71,42,.25); }
 .timer-row.active .t-led { background: radial-gradient(circle at 35% 30%, #ff8a6e, var(--vermilion));
   box-shadow: 0 0 7px var(--vermilion), 0 0 2px #fff inset; }
@@ -563,42 +587,48 @@ button { font-family: inherit; }
   background: var(--tx), linear-gradient(158deg, color-mix(in srgb, var(--cat-capped) 60%, #0d0b1a) 0%, color-mix(in srgb, var(--cat-capped) 80%, #07060f) 100%);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.18), inset 0 -10px 18px rgba(0,0,0,.35);
 }
-/* the texture rides ABOVE the foil too — embossed into it, not buried under it */
-.card-face.front .tx { position: absolute; inset: 0; border-radius: 8px; pointer-events: none;
-  z-index: 2; background: var(--tx); mix-blend-mode: overlay; }
-/* ── base TEXTURES under the foil (picked per card; cosmos = the original) ── */
-.tx-cosmos .card-face.front { --tx:
+:root {
+  --tx-cosmos:
     radial-gradient(2px 2px at 22% 26%, rgba(255,247,210,.95), transparent),
     radial-gradient(1.5px 1.5px at 71% 20%, rgba(255,255,255,.9), transparent),
     radial-gradient(2px 2px at 85% 60%, rgba(255,240,180,.8), transparent),
     radial-gradient(1.5px 1.5px at 33% 70%, rgba(255,247,210,.8), transparent),
-    repeating-conic-gradient(from 0deg at 50% 38%, rgba(255,250,225,.14) 0 6deg, transparent 6deg 14deg); }
-/* seigaiha — overlapping wave scallops, two offset rows */
-.tx-waves .card-face.front { --tx:
+    repeating-conic-gradient(from 0deg at 50% 38%, rgba(255,250,225,.14) 0 6deg, transparent 6deg 14deg);
+  --tx-waves:
     radial-gradient(circle at 50% 125%, transparent 42%, rgba(255,250,225,.30) 43% 47%, transparent 48% 58%, rgba(255,250,225,.20) 59% 63%, transparent 64%),
     radial-gradient(circle at 0% 125%, transparent 42%, rgba(255,250,225,.30) 43% 47%, transparent 48% 58%, rgba(255,250,225,.20) 59% 63%, transparent 64%),
     radial-gradient(circle at 100% 125%, transparent 42%, rgba(255,250,225,.30) 43% 47%, transparent 48% 58%, rgba(255,250,225,.20) 59% 63%, transparent 64%);
+  --tx-rays:
+    radial-gradient(circle at 26% 45%, rgba(255,245,205,.30) 0%, transparent 34%),
+    repeating-conic-gradient(from 0deg at 26% 45%, rgba(255,250,225,.24) 0 7deg, transparent 7deg 16deg);
+  --tx-pin: repeating-linear-gradient(115deg, rgba(255,255,255,.16) 0 1px, transparent 1px 7px);
+  --tx-ichimatsu: repeating-conic-gradient(rgba(255,250,225,.14) 0 90deg, transparent 90deg 180deg);
+  --tx-lattice:
+    repeating-linear-gradient(45deg, rgba(255,250,225,.15) 0 1px, transparent 1px 12px),
+    repeating-linear-gradient(-45deg, rgba(255,250,225,.15) 0 1px, transparent 1px 12px);
+  --tx-dots: radial-gradient(2.5px at 50% 50%, rgba(255,250,225,.30), transparent 65%);
+}
+/* the texture rides ABOVE the foil too — embossed into it, not buried under it */
+.card-face.front .tx { position: absolute; inset: 0; border-radius: 8px; pointer-events: none;
+  z-index: 2; background: var(--tx); mix-blend-mode: overlay; }
+/* ── base TEXTURES under the foil (picked per card; cosmos = the original) ── */
+.tx-cosmos .card-face.front { --tx: var(--tx-cosmos); }
+/* seigaiha — overlapping wave scallops */
+.tx-waves .card-face.front { --tx: var(--tx-waves);
   --tx-size: 48px 24px;
   background-size: var(--tx-size), var(--tx-size), var(--tx-size), auto; }
 .tx-waves .card-face.front .tx { background-size: var(--tx-size); }
 /* rising-sun rays from behind the emblem */
-.tx-rays .card-face.front { --tx:
-    radial-gradient(circle at 26% 45%, rgba(255,245,205,.30) 0%, transparent 34%),
-    repeating-conic-gradient(from 0deg at 26% 45%, rgba(255,250,225,.24) 0 7deg, transparent 7deg 16deg); }
+.tx-rays .card-face.front { --tx: var(--tx-rays); }
 /* fine pinstripe suit cloth */
-.tx-pin .card-face.front { --tx:
-    repeating-linear-gradient(115deg, rgba(255,255,255,.16) 0 1px, transparent 1px 7px); }
+.tx-pin .card-face.front { --tx: var(--tx-pin); }
 /* ichimatsu — the checker */
-.tx-ichimatsu .card-face.front { --tx:
-    repeating-conic-gradient(rgba(255,250,225,.14) 0 90deg, transparent 90deg 180deg); }
+.tx-ichimatsu .card-face.front { --tx: var(--tx-ichimatsu); }
 .tx-ichimatsu .card-face.front, .tx-ichimatsu .card-face.front .tx { background-size: 30px 30px, auto; }
 /* kagome — diagonal woven lattice */
-.tx-lattice .card-face.front { --tx:
-    repeating-linear-gradient(45deg, rgba(255,250,225,.15) 0 1px, transparent 1px 12px),
-    repeating-linear-gradient(-45deg, rgba(255,250,225,.15) 0 1px, transparent 1px 12px); }
+.tx-lattice .card-face.front { --tx: var(--tx-lattice); }
 /* shibori dots */
-.tx-dots .card-face.front { --tx:
-    radial-gradient(2.5px at 50% 50%, rgba(255,250,225,.30), transparent 65%); }
+.tx-dots .card-face.front { --tx: var(--tx-dots); }
 .tx-dots .card-face.front, .tx-dots .card-face.front .tx { background-size: 17px 17px, auto; }
 /* gold filigree inner frame */
 .card-face.front::before {

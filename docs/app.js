@@ -948,7 +948,7 @@ for (const btn of document.querySelectorAll                   (".re-step")) {
 // the alarm key cycles the voices — and each press PREVIEWS the one it lands on
 $("t-alarm-key").onclick = () => {
   editAlarm = ALARM_CYCLE[(ALARM_CYCLE.indexOf(editAlarm) + 1) % ALARM_CYCLE.length];
-  $("t-alarm-label").textContent = ALARM_LABEL[editAlarm];
+  $("t-alarm-key").textContent = ALARM_LABEL[editAlarm];
   playAlarm(editAlarm);
 };
 
@@ -961,7 +961,7 @@ function openTimerEditor(cardId        , timer              ) {
   editMode = timer?.mode ?? "up";
   writeDurationMs(timer?.targetMs ?? null);
   editAlarm = timer?.alarmStyle ?? "chime";
-  $("t-alarm-label").textContent = ALARM_LABEL[editAlarm];
+  $("t-alarm-key").textContent = ALARM_LABEL[editAlarm];
   syncTimerModeUI();
   elRackArea.classList.add("editing");
   elRackEditor.hidden = false;

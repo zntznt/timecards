@@ -175,38 +175,32 @@
              machine's own controls — latch keys, steppers, an alarm cycle key.
              Typing still overrides the steppers. -->
         <div id="rack-editor" class="rack-editor" hidden>
-          <div class="re-cell">
-            <span class="re-lbl">NAME ・ 名前</span>
-            <input id="t-name" class="re-in" type="text" maxlength="40" placeholder="Deep work" />
-          </div>
+          <label class="re-cell re-name">NAME<input id="t-name" type="text" maxlength="40" placeholder="Deep work" /></label>
           <div class="re-cell re-modes">
-            <button type="button" id="re-up" class="re-opt"><span class="t-led"></span>STOPWATCH ▲</button>
-            <button type="button" id="re-down" class="re-opt"><span class="t-led"></span>COUNTDOWN ▼</button>
+            <button type="button" id="re-up" class="re-latch">STOPWATCH ▲</button>
+            <button type="button" id="re-down" class="re-latch">COUNTDOWN ▼</button>
           </div>
-          <div id="dur-fields" class="re-cell">
-            <span class="re-lbl">LENGTH ・ 長さ</span>
-            <div class="re-time">
-              <div class="re-unit">
-                <button type="button" class="re-step" data-u="h" data-d="1">▲</button>
-                <input id="t-h" type="number" min="0" max="23" step="1" inputmode="numeric" placeholder="0" />
-                <button type="button" class="re-step" data-u="h" data-d="-1">▼</button>
-              </div>
-              <span class="re-colon">:</span>
-              <div class="re-unit">
-                <button type="button" class="re-step" data-u="m" data-d="1">▲</button>
-                <input id="t-m" type="number" min="0" max="59" step="1" inputmode="numeric" placeholder="25" />
-                <button type="button" class="re-step" data-u="m" data-d="-1">▼</button>
-              </div>
-              <span class="re-colon">:</span>
-              <div class="re-unit">
-                <button type="button" class="re-step" data-u="s" data-d="1">▲</button>
-                <input id="t-s" type="number" min="0" max="59" step="1" inputmode="numeric" placeholder="0" />
-                <button type="button" class="re-step" data-u="s" data-d="-1">▼</button>
-              </div>
+          <div id="dur-fields" class="re-cell re-steppers">
+            <div class="re-unit">
+              <button type="button" class="re-step" data-u="h" data-d="1">▲</button>
+              <input id="t-h" type="number" min="0" max="23" step="1" inputmode="numeric" placeholder="0" />
+              <button type="button" class="re-step" data-u="h" data-d="-1">▼</button>
+            </div>
+            <span class="re-colon">:</span>
+            <div class="re-unit">
+              <button type="button" class="re-step" data-u="m" data-d="1">▲</button>
+              <input id="t-m" type="number" min="0" max="59" step="1" inputmode="numeric" placeholder="25" />
+              <button type="button" class="re-step" data-u="m" data-d="-1">▼</button>
+            </div>
+            <span class="re-colon">:</span>
+            <div class="re-unit">
+              <button type="button" class="re-step" data-u="s" data-d="1">▲</button>
+              <input id="t-s" type="number" min="0" max="59" step="1" inputmode="numeric" placeholder="0" />
+              <button type="button" class="re-step" data-u="s" data-d="-1">▼</button>
             </div>
           </div>
           <div class="re-cell re-actions">
-            <button type="button" id="t-alarm-key" class="re-opt"><span class="t-led on"></span><span id="t-alarm-label">♪ CHIME</span></button>
+            <button type="button" id="t-alarm-key" class="re-key alarm">♪ CHIME</button>
             <div class="re-act-row">
               <button type="button" id="t-cancel" class="re-key">CANCEL</button>
               <button type="button" id="t-save" class="re-key save">SAVE</button>

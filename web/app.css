@@ -45,6 +45,7 @@
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
+body { overflow-x: clip; }
 html { height: 100%; }
 body {
   font-family: "Saira Condensed", sans-serif;
@@ -411,29 +412,43 @@ button { font-family: inherit; }
   background: repeating-linear-gradient(45deg, #232219 0 6px, #2a2920 6px 12px);
   border: 1px dashed #3a392f; border-radius: 4px; }
 
-/* ── the side slot: the card enters the machine HERE, mid-chassis at rack height ── */
-.rack-area { position: relative; }
-.side-slot { position: absolute; right: -22px; top: 50%; transform: translateY(-50%);
-  width: 22px; height: 84px; pointer-events: none; }
-.ss-slit { position: absolute; right: 9px; top: 0; bottom: 0; width: 7px; border-radius: 3px;
+/* ── the side slot: the card passes THROUGH the chassis side, level with the
+   socket panel. Its spine (emblem + vertical name) stays out — pull it to eject. ── */
+.rack-wrap { position: relative; }
+/* the slit straddles the device's outer edge (rack right edge + 22px of shell) */
+.ss-slit { position: absolute; left: calc(100% + 18px); top: 50%; transform: translateY(-50%);
+  width: 8px; height: 100px; border-radius: 4px;
   background: linear-gradient(90deg, #14130f, #2a2820);
   box-shadow: inset 2px 0 3px rgba(0,0,0,.9), 1px 0 0 var(--shell-hi);
   transition: box-shadow .25s ease; }
-/* while a card is airborne, the slit lights up as the drop target */
 body.card-dragging .ss-slit {
   box-shadow: inset 2px 0 3px rgba(0,0,0,.9), 0 0 10px 2px rgba(232,71,42,.55), 1px 0 0 var(--shell-hi); }
-/* the seated card's edge, sticking out of the slit */
+/* the window begins AT the device edge: the spine exists only OUTSIDE the shell,
+   and slides are clipped so it truly comes out of (and goes into) the slit */
+.ss-window { position: absolute; left: calc(100% + 25px); top: 50%; transform: translateY(-50%);
+  width: 72px; height: 108px; overflow: hidden; pointer-events: none; }
 .ss-edge { --cat: var(--olive);
-  position: absolute; right: -7px; top: 50%; transform: translateY(-50%);
-  width: 18px; height: 62px; border-radius: 0 5px 5px 0;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--cat) 70%, #000) 0 2px, var(--cat) 2px);
+  pointer-events: auto; cursor: grab; touch-action: none;
+  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 25px; height: 92px; border: none; border-radius: 0 6px 6px 0;
+  display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 7px 0;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--cat) 65%, #000) 0 2px, var(--cat) 2px);
   box-shadow: inset -2px 0 0 rgba(255,255,255,.25), inset 0 0 0 1px rgba(0,0,0,.25),
     2px 2px 5px rgba(0,0,0,.3);
 }
+.ss-edge:active { cursor: grabbing; }
 .ss-edge[hidden] { display: none; }
-@keyframes side-in { 0% { transform: translate(30px, -50%); opacity: .3; }
-  70% { transform: translate(-2px, -50%); opacity: 1; } 100% { transform: translate(0, -50%); } }
+.ss-emblem { font-style: normal; font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 900;
+  font-size: 12px; color: #fff6ec; text-shadow: 0 1px 1px rgba(0,0,0,.5); flex: 0 0 auto; }
+.ss-name { writing-mode: vertical-rl; font-size: 9.5px; font-weight: 700; letter-spacing: .08em;
+  color: #fff6ec; text-shadow: 0 0 2px rgba(0,0,0,.85), 1px 0 1px rgba(0,0,0,.6);
+  overflow: hidden; text-overflow: ellipsis; max-height: 62px; white-space: nowrap; }
+@keyframes side-in { 0% { transform: translate(-28px, -50%); opacity: .4; }
+  70% { transform: translate(2px, -50%); opacity: 1; } 100% { transform: translate(0, -50%); } }
 .ss-edge.inserting { animation: side-in .4s cubic-bezier(.3,1.15,.5,1); }
+/* pulled free: the spine leaves rightward and the card is out */
+@keyframes side-out { to { transform: translate(70px, -50%); opacity: .15; } }
+.ss-edge.pulled { animation: side-out .26s cubic-bezier(.4,0,.8,.6) forwards; }
 
 .footstamp { display: flex; justify-content: space-between; margin: 12px 8px 2px;
   font-size: 9px; letter-spacing: .14em; color: var(--ink-soft); opacity: .7; font-weight: 600; }
@@ -1128,7 +1143,7 @@ dialog[open] .index-card { animation: ic-up .5s cubic-bezier(.2,.85,.3,1); }
 @media (prefers-reduced-motion: reduce) {
   .paper.spooling, .paper.cut, .pr-stub.feeding { animation: none; }
   .lcd.waking { animation: none; }
-  .ss-edge.inserting { animation: none; }
+  .ss-edge.inserting, .ss-edge.pulled { animation: none; }
   .card-3d { transition: opacity 1ms; }   /* flip lands instantly, no 3D turn */
   dialog[open] .index-card, .index-card.away { animation: none; }
   .card, .card.airborne { transition: none; }   /* gesture beats resolve via their timeout clocks */

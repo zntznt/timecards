@@ -200,6 +200,38 @@ let alarmedFor: string | null = null; // timerId:sessionId we've already alarmed
 let lastChimeAt = 0;                  // last time the ringing chime re-played
 const CHIME_EVERY_MS = 5_000;         // chime begs until acknowledged; blip stays a one-shot nudge
 
+// ── the spine in the side slot: grab and pull OUT to eject ──────
+const elSsEdge = $<HTMLButtonElement>("ss-edge");
+let spinePull: { startX: number; id: number } | null = null;
+elSsEdge.addEventListener("pointerdown", (e) => {
+  if (elDevice.classList.contains("is-locked")) return;   // the lock holds the card in
+  spinePull = { startX: e.clientX, id: e.pointerId };
+  elSsEdge.style.transition = "none";
+  try { elSsEdge.setPointerCapture?.(e.pointerId); } catch {}
+});
+elSsEdge.addEventListener("pointermove", (e) => {
+  if (!spinePull || e.pointerId !== spinePull.id) return;
+  const dx = Math.max(0, Math.min(40, e.clientX - spinePull.startX));
+  elSsEdge.style.transform = `translate(${dx}px, -50%)`;
+});
+async function endSpinePull(e: PointerEvent) {
+  if (!spinePull || e.pointerId !== spinePull.id) return;
+  const dx = e.clientX - spinePull.startX;
+  spinePull = null;
+  if (dx > 26) {                                  // pulled free → the card comes out
+    elSsEdge.style.transition = ""; elSsEdge.style.transform = "";
+    elSsEdge.classList.add("pulled");
+    sndEject();
+    await dev.eject();
+    setTimeout(async () => { elSsEdge.classList.remove("pulled"); await renderAll(); }, 240);
+  } else {                                        // not far enough → springs back in
+    elSsEdge.style.transition = "transform .16s ease";
+    elSsEdge.style.transform = "";
+  }
+}
+elSsEdge.addEventListener("pointerup", endSpinePull);
+elSsEdge.addEventListener("pointercancel", endSpinePull);
+
 // ── render ──────────────────────────────────────────────────────
 async function renderDevice() {
   const v: SlotView = await dev.view();
@@ -225,6 +257,8 @@ async function renderDevice() {
     const live = (v.state === "running" || v.state === "paused" || v.state === "finished") ? v.elapsedMs : 0;
     $("lcd-today").textContent = `TODAY ${fmtDuration((todayBanked.get(v.card.id) ?? 0) + live)}`;
     ssEdge.style.setProperty("--cat", v.card.color || "#6f7457");
+    $("ss-emblem").textContent = v.card.emblem?.trim() || ([...v.card.name][0]?.toUpperCase() ?? "");
+    $("ss-name").textContent = v.card.name;
     if (v.card.id !== lastSlottedId) {          // a fresh card slides in through the side
       lastSlottedId = v.card.id;
       ssEdge.classList.remove("inserting"); void ssEdge.offsetWidth;

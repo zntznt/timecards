@@ -404,6 +404,25 @@ function foilFor(id        )         { // stable per-card foil treatment
 function rarityFor(totalMs        )         { // cards level up with tracked time
   return totalMs >= 36_000_000 ? "★★★" : totalMs >= 3_600_000 ? "★★☆" : "★☆☆";
 }
+// optical centering for medallion glyphs: the FONT's line box centers fine, but the
+// INK sits low inside it (Zen Kaku reserves kana headroom; emoji have their own ideas).
+// Measure the actual ink per glyph and counter-shift. Cache per glyph+size.
+const inkCache = new Map                ();
+function inkShiftY(glyph        , px        )         {
+  const key = `${glyph}@${px}`;
+  if (!inkCache.has(key)) {
+    const ctx = document.createElement("canvas").getContext("2d") ;
+    ctx.font = `900 ${px}px "Zen Kaku Gothic New", sans-serif`;
+    const m = ctx.measureText(glyph);
+    const boxCenter = ((m.fontBoundingBoxAscent ?? px * 0.8) - (m.fontBoundingBoxDescent ?? px * 0.2)) / 2;
+    const inkCenter = ((m.actualBoundingBoxAscent ?? boxCenter) - (m.actualBoundingBoxDescent ?? 0)) / 2;
+    inkCache.set(key, Math.round((inkCenter - boxCenter) * 10) / 10);
+  }
+  return inkCache.get(key) ;
+}
+// metrics measured before the webfont arrives are wrong — remeasure once it lands
+document.fonts?.ready.then(() => { if (inkCache.size) { inkCache.clear(); renderAll(); } });
+
 const el = (tag        , cls        , text         ) => {
   const e = document.createElement(tag); e.className = cls;
   if (text !== undefined) e.textContent = text;
@@ -499,7 +518,13 @@ async function cardItem(c      , active               , index        , sessions 
   rank.appendChild(noEl);
 
   const art = el("div", "card-art");
-  const emblem = el("div", "card-emblem", c.emblem?.trim() || ([...c.name][0]?.toUpperCase() ?? "★"));
+  const emblem = el("div", "card-emblem");
+  {
+    const glyph = c.emblem?.trim() || ([...c.name][0]?.toUpperCase() ?? "★");
+    const g = el("span", "g", glyph);
+    g.style.transform = `translateY(${inkShiftY(glyph, 30)}px)`;
+    emblem.appendChild(g);
+  }
   const id = el("div", "card-id");
   id.append(el("div", "card-nm jp", c.name), el("div", "card-cat",
     c.category ? c.category.toUpperCase() : `${timers.length} TIMER${timers.length === 1 ? "" : "S"}`));

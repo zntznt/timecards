@@ -37,37 +37,30 @@
         <div class="pr-stub"></div>
       </div>
 
-      <!-- THE REPORT: stats frozen onto paper at print time. -->
+      <!-- THE DAILY RECEIPT: today's sessions as line items, frozen at print time. -->
       <div id="paper-report" class="paper" hidden>
         <div class="p-head">
           <div class="p-title">TIMECARDS</div>
-          <div class="p-sub">ACTIVITY REPORT ・ 活動記録</div>
+          <div class="p-sub">DAILY RECEIPT ・ 本日</div>
           <div class="p-sub" id="s-stamp"></div>
         </div>
 
-        <section class="stats-summary">
-          <div class="p-row"><span>TOTAL TRACKED</span><b id="s-total">0m</b></div>
-          <div class="p-row"><span>SESSIONS</span><b id="s-sessions">0</b></div>
-          <div class="p-row"><span>ACTIVE DAYS</span><b id="s-active">0</b></div>
+        <ul id="s-items" class="recent-list"></ul>
+        <div class="p-tear-rule"></div>
+        <div class="p-row"><span>ITEMS</span><b id="s-count">0</b></div>
+        <div class="p-row"><span>TOTAL TODAY</span><b id="s-total">00:00</b></div>
+
+        <section class="stats-block">
+          <h3 class="p-lbl">BY CARD ・ TODAY</h3>
+          <div id="s-breakdown" class="breakdown"></div>
         </section>
 
         <section class="stats-block">
           <h3 class="p-lbl">LAST 14 DAYS</h3>
           <div id="s-chart" class="chart"></div>
         </section>
-        <div class="p-streak">CURRENT STREAK ・ <span id="s-streak">0</span> DAYS 🔥</div>
-        <div class="p-row"><span>LONGEST</span><b id="s-longest">0</b></div>
 
-        <section class="stats-block">
-          <h3 class="p-lbl">BY CARD ・ BY TIMER</h3>
-          <div id="s-breakdown" class="breakdown"></div>
-        </section>
-
-        <section class="stats-block">
-          <h3 class="p-lbl">RECENT SESSIONS</h3>
-          <ul id="s-recent" class="recent-list"></ul>
-        </section>
-
+        <div class="p-streak" id="s-loyalty">STREAK 0 DAYS 🔥</div>
         <div class="p-code"></div>
         <div class="p-foot">THANK YOU ・ ありがとう</div>
         <button type="button" class="p-end" data-cut title="tear the receipt off">— ✂ — — — — — — — — — — — —</button>
@@ -101,7 +94,7 @@
         <div class="pr-big-tape">
           <div class="p-head">
             <div class="p-title">TIMECARDS</div>
-            <div class="p-sub">DETAILED REPORT ・ 詳細記録</div>
+            <div class="p-sub">STATEMENT ・ 明細</div>
             <div class="p-sub" id="pd-stamp"></div>
           </div>
           <div id="pd-pages"></div>

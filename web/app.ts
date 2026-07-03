@@ -1060,66 +1060,136 @@ async function renderDetailed() {
   const d = new Date(now);
   $("pd-stamp").textContent = `${isoDate(now)}  ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   const pages: HTMLElement[] = [];
-
-  // page 1: OVERVIEW
   const st = Stats.streaks(sessions, now);
-  const ov = el("div", "");
-  const ovLbl = el("h3", "p-lbl", "OVERVIEW ・ 概要"); ov.appendChild(ovLbl);
-  ov.append(
-    pdRow("TOTAL TRACKED", shortDur(Stats.totalMs(sessions, now))),
+  const total = Stats.totalMs(sessions, now);
+  const sparse = sessions.length < 10 || st.activeDays < 7;   // young accounts get honesty, not noise
+
+  const cols = (data: Array<{ label: string; ms: number; hot?: boolean }>) => {
+    const host = el("div", "pd-cols");
+    const max = Math.max(1, ...data.map(x => x.ms));
+    for (const x of data) {
+      const col = el("div", "pd-col" + (x.hot ? " hot" : ""));
+      const bar = document.createElement("i");
+      bar.style.height = `${Math.round((x.ms / max) * 100)}%`;
+      col.append(bar, el("b", "", x.label));
+      host.appendChild(col);
+    }
+    return host;
+  };
+
+  // ── page 1: SUMMARY — the account header ──
+  const p1 = el("div", "");
+  p1.appendChild(el("h3", "p-lbl", "SUMMARY ・ 概要"));
+  const since = sessions.length ? isoDate(Math.min(...sessions.map(x => x.startedAt))) : "—";
+  let longestMs = 0, longestAt = 0;
+  for (const sn of sessions) { const ms = elapsed(sn, now); if (ms > longestMs) { longestMs = ms; longestAt = sn.startedAt; } }
+  p1.append(
+    pdRow("SINCE", since),
+    pdRow("TOTAL TRACKED", shortDur(total)),
     pdRow("SESSIONS", String(sessions.length)),
     pdRow("ACTIVE DAYS", String(st.activeDays)),
-    pdRow("CURRENT STREAK", `${st.current} DAYS`),
-    pdRow("LONGEST STREAK", `${st.longest} DAYS`),
-    pdRow("CARDS", String(cards.length)),
-    pdRow("TIMERS", String(timers.length)),
+    pdRow("AVG / ACTIVE DAY", shortDur(total / Math.max(1, st.activeDays))),
+    pdRow("AVG SESSION", shortDur(total / Math.max(1, sessions.length))),
+    pdRow("LONGEST SESSION", longestMs ? `${fmtDuration(longestMs)} (${isoDate(longestAt)})` : "—"),
+    pdRow("STREAK", `${st.current} DAYS`),
+    pdRow("BEST STREAK", `${st.longest} DAYS`),
   );
-  pages.push(ov);
+  pages.push(p1);
 
-  // one page per card: its ledger + per-timer roster
-  for (const c of cards) {
-    const mine = sessions.filter(x => x.cardId === c.id);
-    const total = mine.reduce((a, x) => a + elapsed(x, now), 0);
-    const longest = mine.reduce((a, x) => Math.max(a, elapsed(x, now)), 0);
-    const pg = el("div", "");
-    pg.appendChild(el("h3", "p-lbl", `CARD ・ ${c.name}`));
-    pg.append(
-      pdRow("TOTAL", fmtDuration(total)),
-      pdRow("SESSIONS", String(mine.length)),
-      pdRow("LONGEST", fmtDuration(longest)),
-      pdRow("SINCE", mine.length ? isoDate(Math.min(...mine.map(x => x.startedAt))) : "—"),
-    );
-    const roster = timers.filter(t => t.cardId === c.id);
-    if (roster.length) {
-      pg.appendChild(el("h3", "p-lbl", "BY TIMER"));
-      for (const t of roster) {
-        const tms = mine.filter(x => x.timerId === t.id);
-        const sub = el("div", "pd-sub");
-        sub.append(
-          el("span", "", `${t.mode === "down" ? "▼" : "▲"} ${t.name}`),
-          el("span", "", `${fmtDuration(tms.reduce((a, x) => a + elapsed(x, now), 0))} (${tms.length})`),
-        );
-        pg.appendChild(sub);
-      }
+  // ── page 2: RHYTHM — when the practice happens ──
+  const p2 = el("div", "");
+  p2.appendChild(el("h3", "p-lbl", "RHYTHM ・ 週間"));
+  if (sparse) {
+    p2.appendChild(el("div", "pd-note", "not enough data yet ・ keep tracking"));
+  } else {
+    const WD = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+    const wd = new Array(7).fill(0);
+    const HB = ["0-4", "4-8", "8-12", "12-16", "16-20", "20-24"];
+    const hb = new Array(6).fill(0);
+    for (const sn of sessions) {
+      const t = new Date(sn.startedAt); const ms = elapsed(sn, now);
+      wd[(t.getDay() + 6) % 7] += ms;
+      hb[Math.min(5, Math.floor(t.getHours() / 4))] += ms;
     }
-    pages.push(pg);
+    const topWd = wd.indexOf(Math.max(...wd)), topHb = hb.indexOf(Math.max(...hb));
+    p2.appendChild(cols(WD.map((label, i) => ({ label, ms: wd[i], hot: i === topWd }))));
+    p2.appendChild(el("h3", "p-lbl", "TIME OF DAY ・ 時間帯"));
+    p2.appendChild(cols(HB.map((label, i) => ({ label, ms: hb[i], hot: i === topHb }))));
+    const HBN = ["NIGHT", "DAWN", "MORNING", "AFTERNOON", "EVENING", "LATE"];
+    p2.appendChild(el("div", "pd-note", `MOST ACTIVE: ${WD[topWd]} ・ ${HBN[topHb]}`));
   }
+  pages.push(p2);
 
-  // last page: SESSION LOG
-  const log = el("div", "");
-  log.appendChild(el("h3", "p-lbl", "SESSION LOG ・ 記録"));
-  const recents = Stats.recent(sessions, cards, timers, now, 30);
-  if (!recents.length) log.appendChild(el("div", "pd-sub", "no sessions yet"));
-  for (const r of recents) {
-    const when = new Date(r.session.startedAt);
-    const sub = el("div", "pd-sub");
-    sub.append(
-      el("span", "", `${isoDate(r.session.startedAt)} ${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")}  ${r.cardName}/${r.timerName}`),
-      el("span", "", fmtDuration(r.ms)),
-    );
-    log.appendChild(sub);
+  // ── page 3: TREND — is it growing? ──
+  const p3 = el("div", "");
+  p3.appendChild(el("h3", "p-lbl", "TREND ・ 8 WEEKS"));
+  if (sparse) {
+    p3.appendChild(el("div", "pd-note", "not enough data yet ・ keep tracking"));
+  } else {
+    const weekStart = (ms: number) => {
+      const w = new Date(ms); w.setHours(0, 0, 0, 0);
+      w.setDate(w.getDate() - ((w.getDay() + 6) % 7));
+      return w.getTime();
+    };
+    const thisWk = weekStart(now);
+    const WEEK = 7 * 24 * 3600 * 1000;
+    const weeks = new Array(8).fill(0);
+    for (const sn of sessions) {
+      const idx = Math.round((thisWk - weekStart(sn.startedAt)) / WEEK);
+      if (idx >= 0 && idx < 8) weeks[7 - idx] += elapsed(sn, now);
+    }
+    p3.appendChild(cols(weeks.map((ms, i) => ({ label: i === 7 ? "NOW" : `-${7 - i}W`, ms, hot: i === 7 }))));
+    const delta = weeks[6] > 0 ? Math.round(((weeks[7] - weeks[6]) / weeks[6]) * 100) : null;
+    p3.appendChild(el("div", "pd-note",
+      delta === null ? "THIS WEEK (in progress)" : `THIS WEEK vs LAST: ${delta >= 0 ? "+" : ""}${delta}% (in progress)`));
   }
-  pages.push(log);
+  pages.push(p3);
+
+  // ── page 4: ALLOCATION — where the time goes, and where it's drifting ──
+  const p4 = el("div", "");
+  p4.appendChild(el("h3", "p-lbl", "ALLOCATION ・ 配分"));
+  const wkStartMs = (() => { const w = new Date(now); w.setHours(0,0,0,0); w.setDate(w.getDate() - ((w.getDay() + 6) % 7)); return w.getTime(); })();
+  const byCard = Stats.totalsByCard(sessions, cards, timers, now);
+  const wkByCard = new Map<string, number>();
+  for (const sn of sessions) if (sn.startedAt >= wkStartMs)
+    wkByCard.set(sn.cardId, (wkByCard.get(sn.cardId) ?? 0) + elapsed(sn, now));
+  if (!byCard.length) p4.appendChild(el("div", "pd-note", "no tracked time yet"));
+  for (const c of byCard) {
+    const pct = total ? Math.round((c.ms / total) * 100) : 0;
+    const head = el("div", "bd-card-head");
+    const bar = document.createElement("u"); const fill = document.createElement("i");
+    fill.style.width = `${pct}%`; bar.appendChild(fill);
+    head.append(el("span", "", c.name), bar, el("b", "", `${pct}% ・ wk ${shortDur(wkByCard.get(c.id) ?? 0)}`));
+    p4.appendChild(head);
+  }
+  pages.push(p4);
+
+  // ── pages 5+: the LOG, grouped by day, chunked ──
+  const recents = Stats.recent(sessions, cards, timers, now, 60);
+  const chunks: Array<typeof recents> = [];
+  for (let i = 0; i < recents.length; i += 12) chunks.push(recents.slice(i, i + 12));
+  if (!chunks.length) {
+    const pl = el("div", "");
+    pl.append(el("h3", "p-lbl", "SESSION LOG ・ 記録"), el("div", "pd-note", "no sessions yet"));
+    pages.push(pl);
+  }
+  chunks.forEach((chunk, ci) => {
+    const pl = el("div", "");
+    pl.appendChild(el("h3", "p-lbl", `SESSION LOG ・ 記録 (${ci + 1}/${chunks.length})`));
+    let lastDay = "";
+    for (const r of chunk) {
+      const day = isoDate(r.session.startedAt);
+      if (day !== lastDay) { lastDay = day; pl.appendChild(el("div", "pd-day", day)); }
+      const when = new Date(r.session.startedAt);
+      const sub = el("div", "pd-sub");
+      sub.append(
+        el("span", "", `${String(when.getHours()).padStart(2, "0")}:${String(when.getMinutes()).padStart(2, "0")}  ${r.cardName}/${r.timerName}`),
+        el("span", "", fmtDuration(r.ms)),
+      );
+      pl.appendChild(sub);
+    }
+    pages.push(pl);
+  });
 
   pdPageEls = pages;
   showPdPage(1);
@@ -1137,65 +1207,68 @@ async function renderStats() {
   const { sessions, cards, timers, now } = await dev.statsData();
   const d = new Date(now);
   $("s-stamp").textContent = `${isoDate(now)}  ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  $("s-total").textContent = shortDur(Stats.totalMs(sessions, now));
-  $("s-sessions").textContent = String(sessions.length);
-  const st = Stats.streaks(sessions, now);
-  $("s-streak").textContent = String(st.current);
-  $("s-longest").textContent = String(st.longest);
-  $("s-active").textContent = String(st.activeDays);
 
-  // Day chart — the mock receipt's 14 vertical dotted-ink bars, today in amber.
+  const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
+  const today = sessions.filter(sn => sn.startedAt >= dayStart.getTime())
+    .sort((a, b) => a.startedAt - b.startedAt);
+  const cardName = new Map(cards.map(c => [c.id, c.name]));
+  const timerName = new Map(timers.map(t => [t.id, t.name]));
+
+  // today's sessions are the receipt's LINE ITEMS
+  const items = $("s-items"); items.innerHTML = "";
+  for (const sn of today) {
+    const li = el("li", "recent-item");
+    li.append(el("span", "", `${cardName.get(sn.cardId) ?? sn.cardId} / ${timerName.get(sn.timerId) ?? "(deleted)"}`),
+              el("span", "r-ms", fmtDuration(elapsed(sn, now))));
+    items.appendChild(li);
+  }
+  // a live run is on the tape too, marked — the receipt must agree with the LCD
+  const v = await dev.view();
+  const live = v.card && v.timer && (v.state === "running" || v.state === "paused" || v.state === "finished")
+    ? v.elapsedMs : 0;
+  if (live) {
+    const li = el("li", "recent-item r-live");
+    li.append(el("span", "", `▸ ${v.card!.name} / ${v.timer!.name} (running)`),
+              el("span", "r-ms", fmtDuration(live)));
+    items.appendChild(li);
+  }
+  if (!today.length && !live) items.appendChild(el("li", "stats-empty", "no sessions yet today"));
+
+  $("s-count").textContent = String(today.length + (live ? 1 : 0));
+  const totalToday = today.reduce((a, sn) => a + elapsed(sn, now), 0) + live;
+  $("s-total").textContent = fmtDuration(totalToday);
+
+  // BY CARD — today only
+  const bd = $("s-breakdown"); bd.innerHTML = "";
+  const perCard = new Map<string, number>();
+  for (const sn of today) perCard.set(sn.cardId, (perCard.get(sn.cardId) ?? 0) + elapsed(sn, now));
+  if (live && v.card) perCard.set(v.card.id, (perCard.get(v.card.id) ?? 0) + live);
+  const rows = [...perCard.entries()].sort((a, b) => b[1] - a[1]);
+  if (!rows.length) bd.appendChild(el("div", "stats-empty", "—"));
+  const maxCard = rows[0]?.[1] || 1;
+  for (const [cid, ms] of rows) {
+    const head = el("div", "bd-card-head");
+    const bar = document.createElement("u"); const fill = document.createElement("i");
+    fill.style.width = `${Math.round((ms / maxCard) * 100)}%`; bar.appendChild(fill);
+    head.append(el("span", "", cardName.get(cid) ?? cid), bar, el("b", "", shortDur(ms)));
+    bd.appendChild(head);
+  }
+
+  // context strip: the 14-day bars
   const chart = $("s-chart"); chart.innerHTML = "";
   const days = Stats.byDay(sessions, now, 14);
-  const maxDay = Math.max(1, ...days.map(d => d.ms));
+  const maxDay = Math.max(1, ...days.map(x => x.ms));
   const todayKey = days[days.length - 1].day;
-  for (const d of days) {
+  for (const x of days) {
     const bar = document.createElement("i");
-    bar.style.height = `${Math.round((d.ms / maxDay) * 100)}%`;
-    if (d.day === todayKey) bar.className = "hot";
+    bar.style.height = `${Math.round((x.ms / maxDay) * 100)}%`;
+    if (x.day === todayKey) bar.className = "hot";
     chart.appendChild(bar);
   }
 
-  // Breakdown by card → timer.
-  const bd = $("s-breakdown"); bd.innerHTML = "";
-  const byCard = Stats.totalsByCard(sessions, cards, timers, now);
-  if (byCard.length === 0) {
-    bd.innerHTML = `<div class="stats-empty">no tracked time yet — start a timer!</div>`;
-  } else {
-    const maxCard = byCard[0].ms || 1;
-    for (const c of byCard) {
-      const block = document.createElement("div"); block.className = "bd-card";
-      const head = document.createElement("div"); head.className = "bd-card-head";
-      head.innerHTML = `<span>${escapeHtml(c.name)}</span>` +
-        `<u><i style="width:${Math.round((c.ms / maxCard) * 100)}%"></i></u><b>${shortDur(c.ms)}</b>`;
-      block.appendChild(head);
-      for (const t of c.timers) {
-        const row = document.createElement("div"); row.className = "bd-timer";
-        row.innerHTML = `<span>${escapeHtml(t.name)}</span>` +
-          `<span class="bt-bar"><span style="width:${Math.round((t.ms / maxCard) * 100)}%"></span></span>` +
-          `<span class="bt-ms">${shortDur(t.ms)}</span>`;
-        block.appendChild(row);
-      }
-      bd.appendChild(block);
-    }
-  }
-
-  // Recent sessions.
-  const rec = $("s-recent"); rec.innerHTML = "";
-  const recents = Stats.recent(sessions, cards, timers, now, 20);
-  if (recents.length === 0) {
-    const li = document.createElement("li"); li.className = "stats-empty"; li.textContent = "no sessions yet";
-    rec.appendChild(li);
-  } else {
-    for (const r of recents) {
-      const li = document.createElement("li"); li.className = "recent-item";
-      const when = new Date(r.session.startedAt);
-      li.innerHTML = `<span><strong>${escapeHtml(r.cardName)}</strong> / ${escapeHtml(r.timerName)}` +
-        `<br><span class="r-when">${when.toLocaleDateString()} ${when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></span>` +
-        `<span class="r-ms">${fmtDuration(r.ms)}</span>`;
-      rec.appendChild(li);
-    }
-  }
+  // the loyalty line
+  const st = Stats.streaks(sessions, now);
+  $("s-loyalty").textContent = `STREAK ${st.current} DAYS 🔥 ・ BEST ${st.longest}`;
 }
 
 function escapeHtml(s: string): string {

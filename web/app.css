@@ -999,6 +999,20 @@ button { font-family: inherit; }
 .p-btn:disabled { color: #b3afa2; border-color: #cfcabb; cursor: default; background: transparent; }
 /* detailed-page bits reuse the receipt classes; sub-rows are dimmer + indented */
 .pd-sub { font-size: 13px; color: #7a766a; padding-left: 8px; display: flex; justify-content: space-between; gap: 8px; }
+/* labeled vertical bar columns (weekday / time-of-day / weekly trend) */
+.pd-cols { display: flex; gap: 4px; align-items: flex-end; height: 70px; margin: 6px 0 2px; }
+.pd-col { flex: 1; height: 100%; display: flex; flex-direction: column; align-items: center;
+  justify-content: flex-end; gap: 2px; min-width: 0; }
+.pd-col i { width: 100%; min-height: 2px;
+  background: repeating-linear-gradient(0deg, var(--pr-print) 0 2px, transparent 2px 3px); }
+.pd-col.hot i { background: repeating-linear-gradient(0deg, #9a5a1e 0 2px, transparent 2px 3px); }
+.pd-col b { font-weight: 400; font-size: 9px; color: #7a766a; letter-spacing: .04em; white-space: nowrap; }
+.pd-note { font-size: 13px; color: #7a766a; text-align: center; margin: 6px 0; }
+.pd-day { font-size: 13px; color: #7a766a; letter-spacing: .08em; border-bottom: 1px solid #cfcabb;
+  margin-top: 8px; padding-bottom: 1px; }
+/* the receipt's item/total separator: a dashed till rule */
+.p-tear-rule { border-top: 2px dashed #b3afa2; margin: 8px 0 6px; }
+.recent-item.r-live { color: #9a5a1e; }
 
 /* ═══════════ THE INDEX CARDS (create/edit = fill in a card, in pencil) ═══════════
    A ruled index card slides up from the desk to the middle, slightly tilted; the

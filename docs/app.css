@@ -446,21 +446,35 @@ button { font-family: inherit; }
   background: repeating-linear-gradient(45deg, #232219 0 6px, #2a2920 6px 12px);
   border: 1px dashed #3a392f; border-radius: 4px; }
 
-/* the pull-tab at the bottom center: pull down, the card comes out */
+/* the CARD GATE in the chassis bottom: a labeled tab where 2xAAA used to be.
+   Machine furniture, not a mini-card: darkened card color, silkscreen name, ⏏. */
 .pull-tab {
-  position: absolute; bottom: -16px; left: 50%; transform: translateX(-50%);
-  width: 52px; height: 18px; border: none; border-radius: 0 0 10px 10px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--card-accent, var(--shell-lo)) 80%, #000) 0 2px, var(--card-accent, var(--shell-lo)) 2px);
-  box-shadow: 0 0 0 1px rgba(0,0,0,.28), 0 3px 5px rgba(0,0,0,.3), inset 0 -2px 0 rgba(255,255,255,.22);
-  cursor: grab; touch-action: none; padding: 0;
+  border: none; padding: 3px 10px 3px 8px; border-radius: 5px;
+  display: inline-flex; align-items: center; gap: 7px; max-width: 60%;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--card-accent, var(--shell-lo)) 72%, #241c14),
+    color-mix(in srgb, var(--card-accent, var(--shell-lo)) 62%, #1a1410));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.22), inset 0 0 0 1px rgba(0,0,0,.35),
+    0 2px 3px rgba(0,0,0,.3);
+  cursor: grab; touch-action: none;
+  transition: transform .15s ease;
 }
-.pull-tab::after { content: ""; position: absolute; left: 50%; top: 7px; transform: translateX(-50%);
-  width: 22px; height: 3px; border-radius: 2px; background: rgba(0,0,0,.28); }
 .pull-tab:active { cursor: grabbing; }
 .pull-tab[hidden] { display: none; }
+.pull-tab i { font-style: normal; }
+#pt-emblem { font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 900; font-size: 11px;
+  line-height: 1; color: #fff6ec; text-shadow: 0 1px 1px rgba(0,0,0,.6); }
+#pt-name { font-family: "Saira Condensed", sans-serif; font-weight: 700; font-size: 10px;
+  letter-spacing: .14em; text-transform: uppercase; color: #fff6ec;
+  text-shadow: 0 1px 1px rgba(0,0,0,.6);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.pt-eject { font-size: 9px; color: rgba(255,246,236,.75); flex: 0 0 auto; }
+#fs-batt[hidden] { display: none; }
 
-.footstamp { display: flex; justify-content: space-between; margin: 12px 8px 2px;
-  font-size: 9px; letter-spacing: .14em; color: var(--ink-soft); opacity: .7; font-weight: 600; }
+.footstamp { display: flex; justify-content: space-between; align-items: center; margin: 10px 8px 2px;
+  min-height: 22px;
+  font-size: 9px; letter-spacing: .14em; color: var(--ink-soft); font-weight: 600; }
+.footstamp > span { opacity: .7; }
 
 /* ═══════════════ THE BINDER ═══════════════ */
 /* the frosted polypropylene sheet, one horizontal scroll of welded pockets */

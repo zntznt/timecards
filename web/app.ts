@@ -42,7 +42,6 @@ const elBigLabel = $("big-label");
 const elStop = $<HTMLButtonElement>("stop");
 const elFinish = $<HTMLButtonElement>("finish");
 const elReset = $<HTMLButtonElement>("reset");
-const elEject = $<HTMLButtonElement>("eject");
 const elLock = $<HTMLButtonElement>("lock-toggle");
 const elTimers = $("timers");
 const elTimerList = $("timer-list");
@@ -219,17 +218,22 @@ async function endTabPull(e: PointerEvent) {
   const dy = e.clientY - tabPull.startY;
   tabPull = null;
   elPullTab.style.transition = ""; elPullTab.style.transform = "";
-  if (dy > 20) {                                  // pulled → the card comes out
+  if (dy > 20 || Math.abs(dy) < 4) {              // pulled through — or a plain click: it IS the eject button
     sndEject();
     await dev.eject();
     await renderAll();
-  } else {
+  } else {                                        // an aborted pull springs back
     elPullTab.style.transition = "transform .15s ease";
     requestAnimationFrame(() => { elPullTab.style.transform = ""; });
   }
 }
 elPullTab.addEventListener("pointerup", endTabPull);
 elPullTab.addEventListener("pointercancel", endTabPull);
+// keyboard activation (click events with no pointer) ejects too
+elPullTab.addEventListener("click", async (e) => {
+  if (e.detail !== 0 || elDevice.classList.contains("is-locked")) return;
+  sndEject(); await dev.eject(); await renderAll();
+});
 
 // ── render ──────────────────────────────────────────────────────
 async function renderDevice() {
@@ -256,7 +260,10 @@ async function renderDevice() {
     $("lcd-today").textContent = `TODAY ${fmtDuration((todayBanked.get(v.card.id) ?? 0) + live)}`;
     $("lcd-stars").textContent = rarityFor((allBanked.get(v.card.id) ?? 0) + live);
     elDevice.dataset.tx = v.card.texture && TEXTURES.includes(v.card.texture) ? v.card.texture : "cosmos";
+    $("pt-emblem").textContent = v.card.emblem?.trim() || ([...v.card.name][0]?.toUpperCase() ?? "");
+    $("pt-name").textContent = v.card.name;
     elPullTab.hidden = false;
+    $("fs-batt").hidden = true;
   } else {
     elDevice.style.removeProperty("--card-accent");
     $("lcd-emblem").textContent = "";
@@ -264,6 +271,7 @@ async function renderDevice() {
     $("lcd-stars").textContent = "";
     delete elDevice.dataset.tx;
     elPullTab.hidden = true;
+    $("fs-batt").hidden = false;
   }
   // a mode override only survives while ITS timer sits ready
   if (modeOverride && (v.state !== "ready" || v.timer?.id !== modeOverride.timerId)) modeOverride = null;
@@ -275,14 +283,13 @@ async function renderDevice() {
     setReadout("--:--");
     elSub.textContent = "⏏ ejected ・ insert a card";
     elBigLabel.textContent = "●"; elBigWord.textContent = "—";
-    elBig.disabled = true; elStop.disabled = elFinish.disabled = elReset.disabled = elEject.disabled = true;
+    elBig.disabled = true; elStop.disabled = elFinish.disabled = elReset.disabled = true;
     elMode.disabled = true;
     elTimers.hidden = true;
     return;
   }
   elCardName.classList.remove("empty");
   elCardName.textContent = v.card!.name;
-  elEject.disabled = v.locked; // the lock holds the card in
   elTimers.hidden = false;
   renderTimerList(v);
 
@@ -791,7 +798,6 @@ elBig.onclick = async () => { sndDome(); await dev.press(modeOverride ?? {}); mo
 elStop.onclick = async () => { sndClick(); await dev.stop(); await renderAll(); };          // freeze & keep
 elFinish.onclick = async () => { sndBank(); alarmedFor = null; await dev.finish(); await renderAll(); }; // bank to history
 elReset.onclick = async () => { sndClick(); alarmedFor = null; await dev.reset(); await renderAll(); }; // discard
-elEject.onclick = async () => { sndEject(); await dev.eject(); await renderAll(); };
 elLock.onclick = async () => { sndLatch(); await dev.lock(); await renderDevice(); };
 
 document.addEventListener("keydown", (e) => {

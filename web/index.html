@@ -152,7 +152,6 @@
         <div class="side left">
           <button id="mode" class="skey" title="override the next run's mode, once">MODE<span class="jp">モード</span></button>
           <button id="stop" class="skey" title="pause and keep your progress">STOP<span class="jp">ストップ</span></button>
-          <button id="finish" class="skey" title="save this run to history">FINISH<span class="jp">セーブ</span></button>
         </div>
         <div class="bigbtn-wrap">
           <button id="big-button" class="bigbtn" aria-label="start, pause, or resume">
@@ -161,8 +160,8 @@
           <span id="big-word" class="bigbtn-label">START</span>
         </div>
         <div class="side right">
+          <button id="finish" class="skey" title="save this run to history">FINISH<span class="jp">セーブ</span></button>
           <button id="reset" class="skey" title="discard this run, back to full">RESET<span class="jp">リセット</span></button>
-          <button id="eject" class="skey" title="remove card">EJECT<span class="jp">イジェクト</span></button>
         </div>
       </div>
 
@@ -174,12 +173,19 @@
         <ul id="timer-list" class="rack"></ul>
       </div>
 
+      <!-- the chassis bottom: silkscreen flanks; the center is the CARD GATE — a
+           labeled tab reading the inserted card. Click or pull it: the card ejects.
+           Empty machine shows the battery label instead. -->
       <div class="footstamp">
-        <span>MADE IN JAPAN</span><span>2 × AAA</span><span>MODEL TC-580</span>
+        <span>MADE IN JAPAN</span>
+        <span id="fs-batt">2 × AAA</span>
+        <button id="pull-tab" class="pull-tab" hidden title="eject the card">
+          <i id="pt-emblem" aria-hidden="true"></i>
+          <span id="pt-name"></span>
+          <i class="pt-eject" aria-hidden="true">⏏</i>
+        </button>
+        <span>MODEL TC-580</span>
       </div>
-
-      <!-- the pull-tab: bottom center — pull down to take the card out -->
-      <button id="pull-tab" class="pull-tab" hidden title="pull to take the card out"></button>
     </section>
 
     <!-- THE BINDER: your cards in welded pockets. Tap flips, drag up slots, ✎ edits. -->

@@ -490,7 +490,7 @@ button { font-family: inherit; }
   position: relative; width: 100%; transform-style: preserve-3d;
   transition: transform 300ms cubic-bezier(.45,.05,.55,.95);
   background: var(--cat);                      /* the colored die-cut frame rotates WITH the faces */
-  border: 2.5px solid #fdfaf0; border-radius: 14px; padding: 4px;
+  border: none; border-radius: 14px; padding: 4px;
   box-shadow:
     0 0 0 1.5px color-mix(in srgb, var(--cat) 60%, #000),
     0 8px 18px -5px rgba(60,52,30,.5),
@@ -684,11 +684,13 @@ button { font-family: inherit; }
 }
 .card-emblem::after { content: "\2726"; position: absolute; top: -3px; right: -5px; font-size: 13px;
   color: #ffe9a8; text-shadow: 0 0 5px #e3bd5c; z-index: 2; }
-.card-id { min-width: 0; position: relative; z-index: 1; }
+.card-id { min-width: 0; position: relative; z-index: 1;
+  padding: 3px 12px 5px 8px; margin: -3px -12px -5px -8px; border-radius: 10px;
+  background: radial-gradient(120% 100% at 32% 50%, rgba(13,11,26,.6), rgba(13,11,26,.25) 62%, transparent 82%); }
 .card-nm { font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 900; font-size: 21px; line-height: 1.25;
   background: linear-gradient(#ffffff, #ffe9a8 45%, #caa23e 56%, #fff7d6);
   -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;
-  -webkit-text-stroke: 1.1px #2a1d0a; paint-order: stroke fill;
+  -webkit-text-stroke: 1.25px #2a1d0a; paint-order: stroke fill;
   /* embossed relief: hard light above, pressed shadow below, warm bloom */
   text-shadow: 0 -1px 0 rgba(255,255,255,.28), 0 1px 0 rgba(0,0,0,.55),
     0 2px 3px rgba(0,0,0,.4), 0 0 7px rgba(255,230,150,.4);

@@ -146,6 +146,10 @@ function sndBank() { // finish: key click + a bright "banked" confirmation tick
   sndClick();
   setTimeout(() => beep(1319, 90), 100);
 }
+function sndDenied() { // poking a LOCKED control: a short low buzz that says "no"
+  tone(150, 0.08, "sawtooth", 0.16);
+  setTimeout(() => tone(120, 0.09, "sawtooth", 0.14), 55);
+}
 const sndThunk = () => { tone(150, 0.16, "sine", 0.3, 60); noiseClick(0.04, 0.15); };   // card insert
 const sndEject = () => tone(90, 0.2, "sine", 0.25, 200);
 function sndPrint() { // dot-matrix printer chatter
@@ -202,7 +206,7 @@ const CHIME_EVERY_MS = 5_000;         // chime begs until acknowledged; blip sta
 const elPullTab = $                   ("pull-tab");
 let tabPull                                        = null;
 elPullTab.addEventListener("pointerdown", (e) => {
-  if (elDevice.classList.contains("is-locked")) return;   // the lock holds the card in
+  if (elDevice.classList.contains("is-locked")) { scoldLock(); return; }   // the lock holds the card in
   tabPull = { startY: e.clientY, id: e.pointerId };
   elPullTab.style.transition = "none";
   try { elPullTab.setPointerCapture?.(e.pointerId); } catch {}
@@ -238,7 +242,9 @@ elPullTab.addEventListener("click", async (e) => {
 async function renderDevice() {
   const v           = await dev.view();
   elDevice.className = v.state + (v.locked ? " is-locked" : "");
-  elLock.textContent = v.locked ? "🔒" : "🔓";
+  elLock.dataset.locked = String(v.locked);
+  elLock.setAttribute("aria-pressed", String(v.locked));
+  elLock.title = v.locked ? "slide to unlock the controls" : "slide to lock the controls";
 
   if (v.dayCount) {
     const d = v.dayCount;
@@ -351,7 +357,7 @@ function renderTimerList(v          ) {
     add.className = "timer-row add";
     add.textContent = "+ ADD TIMER";
     add.title = "add a timer";
-    add.onclick = () => { if (v.card) openTimerEditor(v.card.id, null); };
+    add.onclick = () => { if (isLocked()) return scoldLock(); if (v.card) openTimerEditor(v.card.id, null); };
     elTimerList.appendChild(add);
     filled++;
   }
@@ -379,14 +385,15 @@ function timerRow(t       , activeId               )                {
   }
   const edit = document.createElement("button");
   edit.className = "t-del"; edit.textContent = "✎"; edit.title = "edit timer";
-  edit.onclick = (e) => { e.stopPropagation(); openTimerEditor(t.cardId, t); };
+  edit.onclick = (e) => { e.stopPropagation(); if (isLocked()) return scoldLock(); openTimerEditor(t.cardId, t); };
   const del = document.createElement("button");
   del.className = "t-del"; del.textContent = "✕"; del.title = "delete timer";
   del.onclick = async (e) => {
     e.stopPropagation();
+    if (isLocked()) return scoldLock();   // the lock holds the timer set, too
     if (confirm(`Delete timer "${t.name}"? Its time is saved to history.`)) { await dev.deleteTimer(t.id); await renderAll(); }
   };
-  li.onclick = async () => { sndTick(); await dev.switchTimer(t.id); await renderAll(); };
+  li.onclick = async () => { if (isLocked()) return scoldLock(); sndTick(); await dev.switchTimer(t.id); await renderAll(); };
   top.append(led, nm, live);
   bot.append(cfg, edit, del);
   li.append(top, bot);
@@ -799,11 +806,38 @@ elFinish.onclick = async () => { sndBank(); alarmedFor = null; await dev.finish(
 elReset.onclick = async () => { sndClick(); alarmedFor = null; await dev.reset(); await renderAll(); }; // discard
 elLock.onclick = async () => { sndLatch(); await dev.lock(); await renderDevice(); };
 
+// ── the lock demands attention: while LOCKED, poking any control on the device
+// (except the lock) jolts the latch, flashes the LOCK lamp, and buzzes "no". The
+// engine already no-ops these, but disabled controls don't fire clicks — so we
+// catch the attempt at the capture phase on the device and answer it physically.
+function isLocked() { return elDevice.classList.contains("is-locked"); }
+let lockScoldAt = 0;
+function scoldLock() {
+  const now = Date.now();
+  if (now - lockScoldAt < 260) return;   // one jolt per poke, don't stack
+  lockScoldAt = now;
+  elLock.classList.remove("scold"); void elLock.offsetWidth; elLock.classList.add("scold");
+  const lamp = $("lamp-lock");
+  lamp.classList.remove("flash"); void lamp.offsetWidth; lamp.classList.add("flash");
+  if (!reducedMotion()) sndDenied();
+}
+elDevice.addEventListener("pointerdown", (e) => {
+  if (!elDevice.classList.contains("is-locked")) return;
+  const t = e.target               ;
+  if (elLock.contains(t)) return;                    // the lock itself is always live
+  if (elRackArea.classList.contains("editing")) return;  // the programming panel is its own thing
+  if (t.closest("#pull-tab")) return;                // the pull-tab handles its own locked guard
+  // a poke on any interactive device control while locked → scold
+  if (t.closest("#big-button,.skey,.timer-row,.rack-editor")) scoldLock();
+}, true);
+
 document.addEventListener("keydown", (e) => {
   if (e.code === "Space" && !(e.target instanceof HTMLInputElement) &&
       !(e.target instanceof HTMLSelectElement) && !elCardEditor.open &&
       !elRackArea.classList.contains("editing")) {
-    e.preventDefault(); elBig.click();
+    e.preventDefault();
+    if (elDevice.classList.contains("is-locked")) scoldLock();   // Space is a big-button poke
+    else elBig.click();
   }
 });
 

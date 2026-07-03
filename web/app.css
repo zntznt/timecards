@@ -229,19 +229,54 @@ button { font-family: inherit; }
 .model { font-size: 11px; letter-spacing: .22em; color: var(--ink-soft); font-weight: 600;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .brand b { color: var(--vermilion); }
-/* the lock: a small keyed toggle on the faceplate */
+/* ── the lock: a molded SLIDING DEADBOLT set into the faceplate ──
+   a thumb-slider drives a brushed-metal bolt into a strike plate; the amber LED
+   lights only when the bolt seats. Vermilion stays reserved for LIVE. */
 .lock-toggle {
-  font-size: 14px; line-height: 1; cursor: pointer;
-  background: linear-gradient(180deg, var(--shell-hi), #d3cab0);
-  border: 1px solid var(--shell-edge); border-radius: 6px; padding: 4px 8px;
-  box-shadow: 0 2px 0 var(--shell-lo), inset 0 1px 0 rgba(255,255,255,.5);
-  transition: transform .06s, box-shadow .06s;
+  padding: 3px 4px; border: 1px solid var(--shell-edge); border-radius: 8px;
+  background: linear-gradient(180deg, var(--shell-lo), var(--shell));
+  box-shadow: inset 0 2px 3px rgba(0,0,0,.32), inset 0 -1px 0 var(--shell-hi), 0 1px 0 var(--metal-hi);
+  cursor: pointer; line-height: 0; -webkit-tap-highlight-color: transparent;
 }
-.lock-toggle:active { transform: translateY(2px); box-shadow: 0 0 0 var(--shell-lo), inset 0 1px 3px rgba(0,0,0,.2); }
-#device.is-locked .lock-toggle {
-  background: linear-gradient(180deg, #f7be5a, var(--pr-amber));
-  box-shadow: 0 1px 0 var(--shell-lo), inset 0 1px 3px rgba(120,70,10,.4);
+.lock-toggle .latch { display: block; height: 22px; width: auto; }
+.lock-toggle .latch-bezel { fill: var(--shell-lo); stroke: var(--shell-edge); stroke-width: 1; }
+.lock-toggle .latch-well { stroke: rgba(0,0,0,.35); stroke-width: .75; }
+.lock-toggle .latch-strike { fill: var(--metal); stroke: var(--shell-edge); stroke-width: .75; }
+.lock-toggle .latch-strike-slot { stroke: rgba(0,0,0,.4); stroke-width: 1.4; stroke-linecap: round; }
+.lock-toggle .latch-mark { fill: none; stroke: var(--ink-soft); stroke-width: 1.2;
+  stroke-linecap: round; stroke-linejoin: round; opacity: .55; }
+.lock-toggle .latch-mark-open { fill: #5c7d55; stroke: none; opacity: .7; }
+.lock-toggle .latch-bolt { fill: var(--metal-hi); stroke: var(--shell-edge); stroke-width: .6;
+  transform-box: fill-box; transform-origin: left center; transform: scaleX(.55);
+  transition: transform .34s cubic-bezier(.34,1.4,.5,1); }
+.lock-toggle .latch-thumb { stroke: var(--shell-edge); stroke-width: 1; filter: drop-shadow(0 1px 1px rgba(0,0,0,.35)); }
+.lock-toggle .latch-grip line { stroke: var(--shell-edge); stroke-width: 1; opacity: .6; }
+.lock-toggle .latch-lamp { opacity: .28; filter: saturate(.4) brightness(.7);
+  transition: opacity .25s ease, filter .25s ease; }
+.lock-toggle .latch-carriage { transform: translateX(0);
+  transition: transform .34s cubic-bezier(.34,1.4,.5,1); }
+.lock-toggle:hover .latch-thumb { fill: var(--shell-hi); }
+.lock-toggle:active { box-shadow: inset 0 3px 4px rgba(0,0,0,.42), inset 0 -1px 0 var(--shell-hi); }
+.lock-toggle:focus-visible { outline: 2px solid var(--pr-amber); outline-offset: 1px; }
+/* ── LOCKED: throw the bolt, light the lamp ── */
+#device.is-locked .lock-toggle .latch-carriage { transform: translateX(15px); }
+#device.is-locked .lock-toggle .latch-bolt { transform: scaleX(1); }
+#device.is-locked .lock-toggle .latch-lamp { opacity: 1; filter: none; }
+#device.is-locked .lock-toggle .latch-well { filter: drop-shadow(0 0 3px rgba(244,171,58,.55));
+  transition: filter .25s ease .1s; }
+#device.is-locked .lock-toggle .latch-mark-open { opacity: .18; }
+/* poke a locked control → the whole latch JOLTS + the well/LED flare bright amber */
+.lock-toggle.scold { animation: lock-scold .34s cubic-bezier(.36,.07,.19,.97) both; }
+@keyframes lock-scold {
+  10%, 90% { transform: translateX(-1.5px); }
+  20%, 80% { transform: translateX(2.5px); }
+  30%, 50%, 70% { transform: translateX(-3.5px); }
+  40%, 60% { transform: translateX(3.5px); }
 }
+#device.is-locked .lock-toggle.scold .latch-well {
+  filter: drop-shadow(0 0 6px rgba(244,171,58,.95)) brightness(1.2); }
+#device.is-locked .lock-toggle.scold .latch-lamp {
+  filter: brightness(1.5) drop-shadow(0 0 4px var(--pr-amber)); }
 
 /* ── LCD ── */
 .lcd-bezel {
@@ -310,6 +345,14 @@ button { font-family: inherit; }
   font-weight: 600; }
 .lcd-ticks span { opacity: .5; }
 .lcd-ticks span.on { opacity: 1; color: var(--vermilion-lo); }
+/* the LOCK lamp: amber when engaged (not vermilion — that's for LIVE) */
+#lamp-lock.on { color: #9a5a1e; }
+/* poking a locked control flashes the LOCK lamp bright amber */
+#lamp-lock.flash { animation: lamp-flash .5s ease; }
+@keyframes lamp-flash {
+  0%, 100% { }
+  25%, 75% { color: var(--pr-amber); text-shadow: 0 0 6px var(--pr-amber); opacity: 1; }
+}
 
 /* ── control deck ── */
 .controls { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; margin: 6px 8px 4px; }
@@ -1263,4 +1306,9 @@ dialog[open] .index-card { animation: ic-up .5s cubic-bezier(.2,.85,.3,1); }
   #device.finished .bigbtn { animation: none; }
   .bigbtn, .skey, .pr-key, .lock-toggle, .deck-add { transition: none; }
   .binder__page { scroll-behavior: auto; }
+  /* the deadbolt snaps between states, no slide/spring */
+  .lock-toggle .latch-carriage, .lock-toggle .latch-bolt, .lock-toggle .latch-lamp { transition: none; }
+  /* the scold still FLARES amber (a state, not motion) but doesn't shake or blink */
+  .lock-toggle.scold { animation: none; }
+  #lamp-lock.flash { animation: none; color: var(--pr-amber); text-shadow: 0 0 6px var(--pr-amber); }
 }

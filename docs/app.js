@@ -200,37 +200,38 @@ let alarmedFor                = null; // timerId:sessionId we've already alarmed
 let lastChimeAt = 0;                  // last time the ringing chime re-played
 const CHIME_EVERY_MS = 5_000;         // chime begs until acknowledged; blip stays a one-shot nudge
 
-// ── the spine in the side slot: grab and pull OUT to eject ──────
-const elSsEdge = $                   ("ss-edge");
-let spinePull                                        = null;
-elSsEdge.addEventListener("pointerdown", (e) => {
+// ── the eject lever beside the slit: pull it OUT to take the card out ──
+const elLever = $                   ("ss-lever");
+let leverPull                                        = null;
+elLever.addEventListener("pointerdown", (e) => {
   if (elDevice.classList.contains("is-locked")) return;   // the lock holds the card in
-  spinePull = { startX: e.clientX, id: e.pointerId };
-  elSsEdge.style.transition = "none";
-  try { elSsEdge.setPointerCapture?.(e.pointerId); } catch {}
+  leverPull = { startX: e.clientX, id: e.pointerId };
+  elLever.style.transition = "none";
+  try { elLever.setPointerCapture?.(e.pointerId); } catch {}
 });
-elSsEdge.addEventListener("pointermove", (e) => {
-  if (!spinePull || e.pointerId !== spinePull.id) return;
-  const dx = Math.max(0, Math.min(40, e.clientX - spinePull.startX));
-  elSsEdge.style.transform = `translate(${dx}px, -50%)`;
+elLever.addEventListener("pointermove", (e) => {
+  if (!leverPull || e.pointerId !== leverPull.id) return;
+  const dx = Math.max(0, Math.min(28, e.clientX - leverPull.startX));
+  elLever.style.transform = `translate(${dx}px, -50%)`;
 });
-async function endSpinePull(e              ) {
-  if (!spinePull || e.pointerId !== spinePull.id) return;
-  const dx = e.clientX - spinePull.startX;
-  spinePull = null;
-  if (dx > 26) {                                  // pulled free → the card comes out
-    elSsEdge.style.transition = ""; elSsEdge.style.transform = "";
-    elSsEdge.classList.add("pulled");
+async function endLeverPull(e              ) {
+  if (!leverPull || e.pointerId !== leverPull.id) return;
+  const dx = e.clientX - leverPull.startX;
+  leverPull = null;
+  elLever.style.transition = ""; elLever.style.transform = "";
+  if (dx > 20) {                                  // thrown → the card comes out
+    elLever.classList.add("snapping");
+    setTimeout(() => elLever.classList.remove("snapping"), 240);
     sndEject();
     await dev.eject();
-    setTimeout(async () => { elSsEdge.classList.remove("pulled"); await renderAll(); }, 240);
-  } else {                                        // not far enough → springs back in
-    elSsEdge.style.transition = "transform .16s ease";
-    elSsEdge.style.transform = "";
+    await renderAll();
+  } else {
+    elLever.style.transition = "transform .15s ease";
+    requestAnimationFrame(() => { elLever.style.transform = ""; });
   }
 }
-elSsEdge.addEventListener("pointerup", endSpinePull);
-elSsEdge.addEventListener("pointercancel", endSpinePull);
+elLever.addEventListener("pointerup", endLeverPull);
+elLever.addEventListener("pointercancel", endLeverPull);
 
 // ── render ──────────────────────────────────────────────────────
 async function renderDevice() {
@@ -250,27 +251,21 @@ async function renderDevice() {
   setLamps(v.state, v.locked, v.alarmStyle);
   // the machine acknowledges its card: backlight + collar key to its color,
   // its emblem lights as a custom LCD segment, TODAY counts its day
-  const ssEdge = $("ss-edge");
+  const slit = $("ss-slit");
   if (v.card) {
     elDevice.style.setProperty("--card-accent", v.card.color || "#6f7457");
     $("lcd-emblem").textContent = v.card.emblem?.trim() || ([...v.card.name][0]?.toUpperCase() ?? "");
     const live = (v.state === "running" || v.state === "paused" || v.state === "finished") ? v.elapsedMs : 0;
     $("lcd-today").textContent = `TODAY ${fmtDuration((todayBanked.get(v.card.id) ?? 0) + live)}`;
-    ssEdge.style.setProperty("--cat", v.card.color || "#6f7457");
-    $("ss-emblem").textContent = v.card.emblem?.trim() || ([...v.card.name][0]?.toUpperCase() ?? "");
-    $("ss-name").textContent = v.card.name;
-    if (v.card.id !== lastSlottedId) {          // a fresh card slides in through the side
-      lastSlottedId = v.card.id;
-      ssEdge.classList.remove("inserting"); void ssEdge.offsetWidth;
-      ssEdge.classList.add("inserting");
-    }
-    ssEdge.hidden = false;
+    slit.style.setProperty("--cat", v.card.color || "#6f7457");
+    slit.classList.add("occupied");             // light escapes the groove: a card is seated
+    elLever.hidden = false;
   } else {
     elDevice.style.removeProperty("--card-accent");
     $("lcd-emblem").textContent = "";
     $("lcd-today").textContent = "";
-    ssEdge.hidden = true;
-    lastSlottedId = null;
+    slit.classList.remove("occupied");
+    elLever.hidden = true;
   }
   // a mode override only survives while ITS timer sits ready
   if (modeOverride && (v.state !== "ready" || v.timer?.id !== modeOverride.timerId)) modeOverride = null;
@@ -396,7 +391,6 @@ function timerRow(t       , activeId               )                {
 // documentary back (this card's stats); the pocket's SLOT tab inserts it.
 const flippedCards = new Set        ();
 const todayBanked = new Map                ();   // per-card banked ms since local midnight
-let lastSlottedId                = null;         // to animate the side-slot on a fresh insert
 // the curated foil structures; legacy stored values alias to the nearest one
 const FOILS = ["foil-holo", "foil-gold", "foil-chrome", "foil-aurora", "foil-cracked", "foil-galaxy", "foil-refractor"];
 const FOIL_ALIAS                         = { prism: "holo", emerald: "aurora", violet: "holo", sunset: "gold" };

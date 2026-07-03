@@ -345,7 +345,6 @@ button { font-family: inherit; }
   background: repeating-linear-gradient(45deg, #232219 0 6px, #2a2920 6px 12px);
   border-style: dashed; border-color: #3a392f; }
 .timer-row.add:hover { color: #b9b3a0; background: repeating-linear-gradient(45deg, #232219 0 6px, #2a2920 6px 12px); }
-.timer-row.add.maxed { opacity: .4; cursor: default; }
 .rack-count { flex: 0 0 auto; font-family: "Share Tech Mono", monospace; font-size: 10px;
   color: var(--ink-soft); letter-spacing: .05em; }
 .rack {

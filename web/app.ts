@@ -288,14 +288,16 @@ function renderTimerList(v: SlotView) {
   elTimerList.innerHTML = "";
   $("rack-count").textContent = `${String(v.timers.length).padStart(2, "0")} / ${MAX_TIMERS}`;
   for (const t of v.timers) elTimerList.appendChild(timerRow(t, v.timer?.id ?? null));
-  // the mock's dashed + ADD TIMER row lives IN the rack
-  const maxed = v.timers.length >= MAX_TIMERS;
-  const add = document.createElement("li");
-  add.className = "timer-row add" + (maxed ? " maxed" : "");
-  add.textContent = maxed ? `MAX ${MAX_TIMERS} TIMERS` : "+ ADD TIMER";
-  add.title = maxed ? `max ${MAX_TIMERS} timers` : "add a timer";
-  if (!maxed) add.onclick = () => { if (v.card) openTimerEditor(v.card.id, null); };
-  elTimerList.appendChild(add);
+  // the mock's dashed + ADD TIMER row lives IN the rack — a full rack is
+  // simply 4 timer rows, no cap notice
+  if (v.timers.length < MAX_TIMERS) {
+    const add = document.createElement("li");
+    add.className = "timer-row add";
+    add.textContent = "+ ADD TIMER";
+    add.title = "add a timer";
+    add.onclick = () => { if (v.card) openTimerEditor(v.card.id, null); };
+    elTimerList.appendChild(add);
+  }
 }
 
 function timerRow(t: Timer, activeId: string | null): HTMLLIElement {

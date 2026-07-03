@@ -5,7 +5,7 @@ them and persists the results. Understand this before touching timing.
 
 ## Timers within a card (the big idea)
 
-A **card owns up to `MAX_TIMERS` (10) timers**. Each `Timer` is a saved config
+A **card owns up to `MAX_TIMERS` (4) timers**. Each `Timer` is a saved config
 (name, mode, duration, alarm) AND holds its own in-progress session in
 `timer.liveSession`. The slot tracks which timer is `activeTimerId`. The big
 button drives the **active timer's** session.
@@ -22,7 +22,7 @@ So a half-done 25-min countdown on "Writing" survives you doing an hour on "Cook
 and switching back. This works because suspend is just `pause()` (see below) and the
 held session is three timestamps in storage, not a live in-memory clock.
 
-`device.addTimer` enforces the 10 cap (throws past it). `device.deleteTimer` saves
+`device.addTimer` enforces the `MAX_TIMERS` cap (4; throws past it). `device.deleteTimer` saves
 any in-progress session to history first, then removes the timer; deleting down to
 zero is allowed (the card then shows "add a timer").
 Per-timer history totals: `device.timerTotalMs(id)`; whole-card: `device.totalMs(id)`.

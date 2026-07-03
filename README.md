@@ -38,7 +38,7 @@ node cli/timecards.ts config hobby --deadline 2026-09-01 --until   # 'N days lef
 node cli/timecards.ts status
 node cli/timecards.ts stop
 ```
-A card holds up to 10 timers; switching suspends one and resumes another where it
+A card holds up to 4 timers; switching suspends one and resumes another where it
 left off. Add `--json` to any command for machine-readable output. Run
 `node cli/timecards.ts help` for the full list.
 

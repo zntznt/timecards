@@ -5,7 +5,7 @@
 > a "device", and a big button starts / pauses / resumes its timer. Each card
 > keeps its own separate history. Swap the card → its data swaps in.
 >
-> A card holds up to **10 named timers** (mix of stopwatches and countdowns). One
+> A card holds up to **4 named timers** (mix of stopwatches and countdowns). One
 > is active at a time; **switching a timer suspends it and resumes another where it
 > left off**. Each timer has its own **alarm**; the card carries an optional
 > **deadline / streak** day-count, and the slot can be **locked**. See
@@ -64,7 +64,7 @@ http://localhost:8000/docs/index.html.
 3. **Times are integer epoch-ms; durations are integer ms. Never floats.**
    A session stores `startedAt`, `pausedMs`, `pausedAt` — elapsed is *derived*,
    not a running counter. This is why a timer survives the app closing/reopening.
-4. **One card + one active timer at a time.** A card holds ≤10 timers; switching a
+4. **One card + one active timer at a time.** A card holds ≤4 timers (`MAX_TIMERS`); switching a
    timer (or swapping the card) *suspends* the current one (pauses, held on the
    timer) rather than stopping it. `stop()` freezes and keeps, `reset()` discards;
    only `finish()` (or a repeat, or deleting the timer) banks the run to history.

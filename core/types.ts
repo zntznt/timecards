@@ -3,7 +3,7 @@
 // We never store floats — drift-free and exact. ponytail: ints over floats, no rounding bugs.
 
 /** Max timers a single card may hold. Keeps scope from exploding. */
-export const MAX_TIMERS = 10;
+export const MAX_TIMERS = 4;
 
 /** A thing the user wants to dedicate time to: a hobby, a category, a task.
  *  e.g. "Writing", "Cooking", "Studying". NOT a specific session — the bucket.

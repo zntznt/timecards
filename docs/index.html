@@ -171,6 +171,42 @@
           <span id="rack-count" class="rack-count">00 / 4</span>
         </div>
         <ul id="timer-list" class="rack"></ul>
+        <!-- PROGRAMMING PANEL: creating/editing a timer swaps the plate for the
+             machine's own controls — latch keys, steppers, an alarm cycle key.
+             Typing still overrides the steppers. -->
+        <div id="rack-editor" class="rack-editor" hidden>
+          <label class="re-cell re-name">NAME<input id="t-name" type="text" maxlength="40" placeholder="Deep work" /></label>
+          <div class="re-cell re-modes">
+            <button type="button" id="re-up" class="re-latch">STOPWATCH ▲</button>
+            <button type="button" id="re-down" class="re-latch">COUNTDOWN ▼</button>
+          </div>
+          <div id="dur-fields" class="re-cell re-steppers">
+            <div class="re-unit">
+              <button type="button" class="re-step" data-u="h" data-d="1">▲</button>
+              <input id="t-h" type="number" min="0" max="23" step="1" inputmode="numeric" placeholder="0" />
+              <button type="button" class="re-step" data-u="h" data-d="-1">▼</button>
+            </div>
+            <span class="re-colon">:</span>
+            <div class="re-unit">
+              <button type="button" class="re-step" data-u="m" data-d="1">▲</button>
+              <input id="t-m" type="number" min="0" max="59" step="1" inputmode="numeric" placeholder="25" />
+              <button type="button" class="re-step" data-u="m" data-d="-1">▼</button>
+            </div>
+            <span class="re-colon">:</span>
+            <div class="re-unit">
+              <button type="button" class="re-step" data-u="s" data-d="1">▲</button>
+              <input id="t-s" type="number" min="0" max="59" step="1" inputmode="numeric" placeholder="0" />
+              <button type="button" class="re-step" data-u="s" data-d="-1">▼</button>
+            </div>
+          </div>
+          <div class="re-cell re-actions">
+            <button type="button" id="t-alarm-key" class="re-key alarm">♪ CHIME</button>
+            <div class="re-act-row">
+              <button type="button" id="t-cancel" class="re-key">CANCEL</button>
+              <button type="button" id="t-save" class="re-key save">SAVE</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- the chassis bottom: silkscreen flanks; the center is the CARD GATE — a
@@ -250,40 +286,6 @@
     </form>
   </dialog>
 
-  <!-- Timer editor: another index card from the same box, its own tilt. -->
-  <dialog id="timer-editor" class="editor">
-    <form method="dialog" id="timer-form" class="index-card tilt-r">
-      <div class="ic-head">
-        <h3 id="timer-title">New timer</h3>
-        <span class="ic-jp">タイマー ・ 記入</span>
-      </div>
-      <label class="ic-field">name ・ 名前<input id="t-name" type="text" required maxlength="40" placeholder="Deep work" /></label>
-      <div class="ic-radios">
-        <label class="ic-radio"><input type="radio" name="tmode" value="up" checked /> stopwatch ▴</label>
-        <label class="ic-radio"><input type="radio" name="tmode" value="down" /> countdown ▾</label>
-      </div>
-      <div id="dur-fields" class="ic-dur">
-        <span class="ic-dur-label">length ・ 長さ</span>
-        <span class="ic-dur-in"><input id="t-h" type="number" min="0" max="23" step="1" inputmode="numeric" placeholder="0" /><label for="t-h">h</label></span>
-        <span class="ic-dur-in"><input id="t-m" type="number" min="0" max="59" step="1" inputmode="numeric" placeholder="25" /><label for="t-m">m</label></span>
-        <span class="ic-dur-in"><input id="t-s" type="number" min="0" max="59" step="1" inputmode="numeric" placeholder="0" /><label for="t-s">s</label></span>
-      </div>
-      <label class="ic-field">alarm at zero ・ アラーム
-        <select id="t-alarm">
-          <option value="chime">chime ・ チャイム</option>
-          <option value="blip">short blip ・ ブリップ</option>
-          <option value="digital">digital ・ デジタル</option>
-          <option value="bell">bell ・ ベル</option>
-          <option value="melody">melody ・ メロディ</option>
-          <option value="silent">silent (visual only)</option>
-        </select>
-      </label>
-      <div class="ic-actions">
-        <button type="button" id="timer-cancel" class="ic-btn">cancel</button>
-        <button type="submit" class="ic-btn red">save ・ 保存</button>
-      </div>
-    </form>
-  </dialog>
 
   <script type="module" src="./app.js"></script>
 </body>

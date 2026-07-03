@@ -47,7 +47,6 @@ const elTimers = $("timers");
 const elTimerList = $("timer-list");
 const elList = $("card-list");
 const elCardEditor = $                   ("card-editor");
-const elTimerEditor = $                   ("timer-editor");
 
 const GLYPH                         = { start: "▶", pause: "❚❚", resume: "▶", noop: "●" };
 const WORD                         = { start: "START", pause: "PAUSE", resume: "RESUME", noop: "—" };
@@ -802,7 +801,8 @@ elLock.onclick = async () => { sndLatch(); await dev.lock(); await renderDevice(
 
 document.addEventListener("keydown", (e) => {
   if (e.code === "Space" && !(e.target instanceof HTMLInputElement) &&
-      !(e.target instanceof HTMLSelectElement) && !elCardEditor.open && !elTimerEditor.open) {
+      !(e.target instanceof HTMLSelectElement) && !elCardEditor.open &&
+      !elRackArea.classList.contains("editing")) {
     e.preventDefault(); elBig.click();
   }
 });
@@ -820,9 +820,7 @@ async function closeEditor(dlg                   ) {
   dlg.close();
 }
 // Esc = the same toss-away, not an instant vanish
-for (const dlg of [elCardEditor, elTimerEditor]) {
-  dlg.addEventListener("cancel", (e) => { e.preventDefault(); closeEditor(dlg); });
-}
+elCardEditor.addEventListener("cancel", (e) => { e.preventDefault(); closeEditor(elCardEditor); });
 
 // ── card editor ─────────────────────────────────────────────────
 let editingCardId                = null;
@@ -874,26 +872,35 @@ $                 ("card-form").onsubmit = async (e) => {
   await renderAll();
 };
 
-// ── timer editor ────────────────────────────────────────────────
+// ── the PROGRAMMING PANEL: timers are edited on the machine, not on paper ──
+const elRackArea = $("timers");
+const elRackEditor = $("rack-editor");
 let editingTimerId                = null;
 let timerEditorCardId                = null;
+let editMode            = "up";
+let editAlarm             = "chime";
+const ALARM_CYCLE               = ["chime", "blip", "digital", "bell", "melody", "silent"];
+const ALARM_LABEL                         = {
+  chime: "♪ CHIME", blip: "♪ BLIP", digital: "♪ DIGITAL",
+  bell: "♪ BELL", melody: "♪ MELODY", silent: "ALARM OFF",
+};
 
-// Bounded H:M:S entry — discrete units like the physical device, no free text.
+// Bounded H:M:S entry — steppers AND typed override, like the physical device.
 const elH = $                  ("t-h"), elM = $                  ("t-m"), elS = $                  ("t-s");
 const elDurFields = $("dur-fields");
+const UNIT = { h: { el: elH, max: 23 }, m: { el: elM, max: 59 }, s: { el: elS, max: 59 } }         ;
 
 /** Read + clamp the H:M:S inputs to ms. Empty fields count as 0. */
 function readDurationMs()         {
-  const clamp = (el                  , max        ) => {
-    let n = Math.floor(Number(el.value));
+  const clamp = (el2                  , max        ) => {
+    let n = Math.floor(Number(el2.value));
     if (!Number.isFinite(n) || n < 0) n = 0;
-    if (n > max) { n = max; el.value = String(max); }  // visibly enforce the ceiling
+    if (n > max) { n = max; el2.value = String(max); }  // visibly enforce the ceiling
     return n;
   };
-  const h = clamp(elH, 23), m = clamp(elM, 59), s = clamp(elS, 59);
-  return ((h * 60 + m) * 60 + s) * 1000;
+  const h = clamp(elH, 23), m = clamp(elM, 59), sec = clamp(elS, 59);
+  return ((h * 60 + m) * 60 + sec) * 1000;
 }
-
 /** Write ms back into the H:M:S inputs. */
 function writeDurationMs(ms               ) {
   const total = Math.floor((ms ?? 0) / 1000);
@@ -901,59 +908,89 @@ function writeDurationMs(ms               ) {
   elM.value = ms ? String(Math.floor((total % 3600) / 60)) : "";
   elS.value = ms ? String(total % 60) : "";
 }
-
-/** Grey out the H:M:S fields unless Countdown is selected. */
+/** Latch the mode keys; steppers only matter for a countdown. */
 function syncTimerModeUI() {
-  const down = (elTimerEditor.querySelector("input[name=tmode]:checked")                    )?.value === "down";
-  elDurFields.classList.toggle("disabled", !down);
+  $("re-up").classList.toggle("on", editMode === "up");
+  $("re-down").classList.toggle("on", editMode === "down");
+  elDurFields.classList.toggle("disabled", editMode !== "down");
 }
+$("re-up").onclick = () => { sndTick(); editMode = "up"; syncTimerModeUI(); };
+$("re-down").onclick = () => { sndTick(); editMode = "down"; syncTimerModeUI(); };
 
-// Picking a mode radio updates the fields' look.
-elTimerEditor.querySelectorAll                  ("input[name=tmode]").forEach(r => {
-  r.addEventListener("change", syncTimerModeUI);
-});
-// Editing any H:M:S field clearly means "countdown" — auto-select it, and clamp live.
-for (const el of [elH, elM, elS]) {
-  el.addEventListener("input", () => {
-    (elTimerEditor.querySelector("input[name=tmode][value=down]")                    ).checked = true;
-    syncTimerModeUI();
-  });
-  el.addEventListener("blur", () => readDurationMs());  // clamp to bounds on leaving a field
+// touching time = countdown intent (a set length is never a stopwatch)
+for (const el2 of [elH, elM, elS]) {
+  el2.addEventListener("input", () => { editMode = "down"; syncTimerModeUI(); });
+  el2.addEventListener("blur", () => readDurationMs());  // clamp to bounds on leaving a field
 }
+// steppers: tap steps once, hold repeats — kitchen-timer keys, with wrap
+function stepUnit(u                   , d        ) {
+  const { el: el2, max } = UNIT[u];
+  let n = Math.floor(Number(el2.value));
+  if (!Number.isFinite(n) || n < 0) n = 0;
+  n = (n + d + max + 1) % (max + 1);
+  el2.value = String(n);
+  editMode = "down"; syncTimerModeUI();
+  sndTick();
+}
+for (const btn of document.querySelectorAll                   (".re-step")) {
+  const u = btn.dataset.u                     , d = Number(btn.dataset.d);
+  btn.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    stepUnit(u, d);
+    let iv = 0;
+    const t1 = setTimeout(() => { iv = window.setInterval(() => stepUnit(u, d), 110); }, 420);
+    const stop = () => { clearTimeout(t1); if (iv) clearInterval(iv); };
+    btn.addEventListener("pointerup", stop, { once: true });
+    btn.addEventListener("pointercancel", stop, { once: true });
+    btn.addEventListener("pointerleave", stop, { once: true });
+  });
+}
+// the alarm key cycles the voices — and each press PREVIEWS the one it lands on
+$("t-alarm-key").onclick = () => {
+  editAlarm = ALARM_CYCLE[(ALARM_CYCLE.indexOf(editAlarm) + 1) % ALARM_CYCLE.length];
+  $("t-alarm-key").textContent = ALARM_LABEL[editAlarm];
+  playAlarm(editAlarm);
+};
 
 function openTimerEditor(cardId        , timer              ) {
   timerEditorCardId = cardId;
   editingTimerId = timer?.id ?? null;
-  $("timer-title").textContent = timer ? "Edit timer" : "New timer";
+  // the plate must not change size: pin the editor to the grid's measured height
+  elRackEditor.style.height = `${elTimerList.getBoundingClientRect().height}px`;
   $                  ("t-name").value = timer?.name ?? "";
-  const mode = timer?.mode ?? "up";
-  (elTimerEditor.querySelector(`input[name=tmode][value=${mode}]`)                    ).checked = true;
+  editMode = timer?.mode ?? "up";
   writeDurationMs(timer?.targetMs ?? null);
-  $                   ("t-alarm").value = timer?.alarmStyle ?? "chime";
+  editAlarm = timer?.alarmStyle ?? "chime";
+  $("t-alarm-key").textContent = ALARM_LABEL[editAlarm];
   syncTimerModeUI();
-  openEditor(elTimerEditor);
+  elRackArea.classList.add("editing");
+  elRackEditor.hidden = false;
+  sndClick();
 }
-$("timer-cancel").onclick = () => closeEditor(elTimerEditor);
-$                 ("timer-form").onsubmit = async (e) => {
-  e.preventDefault();
+function closeTimerEditor() {
+  elRackArea.classList.remove("editing");
+  elRackEditor.hidden = true;
+  editingTimerId = null; timerEditorCardId = null;
+}
+$("t-cancel").onclick = () => { sndClick(); closeTimerEditor(); };
+$("t-save").onclick = async () => {
   const name = $                  ("t-name").value.trim();
   const targetMs = readDurationMs();
-  // Intent: a non-zero H:M:S IS a countdown, whatever the radio says — a set length
-  // can never be silently discarded as a stopwatch.
-  const radioMode = (elTimerEditor.querySelector("input[name=tmode]:checked")                    ).value             ;
-  const mode            = targetMs > 0 ? "down" : radioMode === "down" ? "down" : "up";
+  // Intent: a non-zero H:M:S IS a countdown — a set length can never be
+  // silently discarded as a stopwatch.
+  const mode            = targetMs > 0 ? "down" : editMode === "down" ? "down" : "up";
   const finalTarget = mode === "down" ? targetMs : null;
-  const alarmStyle = $                   ("t-alarm").value              ;
   if (mode === "down" && !finalTarget) { alert("Set a countdown length greater than zero (h / m / s)."); return; }
+  sndClick();
   if (editingTimerId) {
-    await dev.configureTimer(editingTimerId, { name: name || undefined, mode, targetMs: finalTarget, alarmStyle });
+    await dev.configureTimer(editingTimerId, { name: name || undefined, mode, targetMs: finalTarget, alarmStyle: editAlarm });
   } else if (timerEditorCardId) {
     try {
-      const t = await dev.addTimer(timerEditorCardId, { name, mode, targetMs: finalTarget, alarmStyle });
+      const t = await dev.addTimer(timerEditorCardId, { name, mode, targetMs: finalTarget, alarmStyle: editAlarm });
       await dev.switchTimer(t.id); // make the new timer active
     } catch (err) { alert(String(err instanceof Error ? err.message : err)); }
   }
-  await closeEditor(elTimerEditor);
+  closeTimerEditor();
   await renderAll();
 };
 

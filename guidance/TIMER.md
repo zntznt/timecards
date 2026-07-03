@@ -125,12 +125,15 @@ but never re-fire for a session already acknowledged.
 
 ## Lock
 
-`Slot.locked` holds the session AND the card: `press()`/`stop()`/`reset()`/
-`finish()`/`switchTimer()`/`slot()`/`eject()` all no-op while locked, so neither a
-fat-finger nor a stray card tap (including NFC) can disturb a running session. The
-lock toggle itself (`lock()`) always works — unlocking is the only way out.
-(Earlier, slotting/ejecting cleared the lock instead; that let a stray tap on the
-deck do exactly what the lock existed to prevent.)
+`Slot.locked` freezes the CARD and its CONFIGURATION while leaving the running
+session controllable: `stop()`/`reset()`/`finish()`/`switchTimer()`/`slot()`/
+`eject()` (and, in the UI, timer add/edit/delete) all no-op while locked, so a stray
+tap can't disturb your setup or swap the card (including via NFC). **`press()` is the
+exception — the big button stays LIVE while locked**, so you can still start / pause /
+resume / repeat the running session; the lock protects the surroundings, not the run
+itself. The lock toggle (`lock()`) always works — unlocking is the only way out.
+(Earlier `press()` was also blocked, and earlier still slotting/ejecting cleared the
+lock; both let a stray action defeat the lock's purpose.)
 
 ## Day-count (`dayCount`)
 

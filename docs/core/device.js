@@ -248,10 +248,13 @@ export class Device {
   /** One press, on the ACTIVE timer:
    *  ready -> start (using the timer's mode/target), running -> pause, paused -> resume,
    *  finished -> repeat (save the round, restart it at the same duration).
-   *  Ignored while locked or when there's no active timer. */
+   *  No-op only when there's no active timer.
+   *  The big button stays LIVE while locked: the lock freezes the card and its
+   *  configuration (eject/slot/switch/stop/reset/finish), but you can still
+   *  start/pause/resume/repeat the running session. `press` alone ignores the lock. */
   async press(opts                                          = {})                    {
     const slot = await this.store.getSlot();
-    if (!slot.cardId || !slot.activeTimerId || slot.locked) return this.view();
+    if (!slot.cardId || !slot.activeTimerId) return this.view();
     const timer = await this.store.getTimer(slot.activeTimerId);
     if (!timer) return this.view();
     const now = this.now();

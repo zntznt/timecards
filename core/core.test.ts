@@ -260,7 +260,7 @@ await test("per-timer alarmStyle resolves into the view", async () => {
   assert.equal((await dev.view()).alarmStyle, "blip");
 });
 
-await test("lock holds the card in: press/stop/eject/swap/switch all no-op until unlock", async () => {
+await test("lock freezes setup (stop/eject/swap/switch) but the big button stays LIVE", async () => {
   const { dev, tick } = harness();
   const a = await dev.createCard("A");
   const b = await dev.createCard("B");
@@ -268,8 +268,11 @@ await test("lock holds the card in: press/stop/eject/swap/switch all no-op until
   const t2 = await dev.addTimer(a.id, "Second");
   await dev.press(); tick(5_000);
   await dev.lock(true);
-  await dev.press();  assert.equal((await dev.view()).state, "running");   // ignored
-  await dev.stop();   assert.equal((await dev.view()).state, "running");   // ignored
+  // the big button IS live while locked: press pauses the running session
+  await dev.press();  assert.equal((await dev.view()).state, "paused");    // press works!
+  await dev.press();  assert.equal((await dev.view()).state, "running");   // and resumes
+  // everything else stays frozen
+  await dev.stop();   assert.equal((await dev.view()).state, "running");   // stop ignored
   await dev.eject();  assert.equal((await dev.view()).card?.id, "a");      // still slotted
   await dev.slot(b.id); assert.equal((await dev.view()).card?.id, "a");    // swap blocked
   await dev.switchTimer(t2.id);

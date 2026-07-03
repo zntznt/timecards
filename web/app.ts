@@ -313,8 +313,8 @@ async function renderDevice() {
   const shownMode = modeOverride ? modeOverride.mode : v.timer.mode;
   elTimerName.innerHTML = (shownMode === "down" ? "COUNTDOWN <b>▼</b>" : "STOPWATCH <b>▲</b>")
     + (modeOverride ? " ・ ONCE" : "");
-  // When finished, the big button stays active and REPEATS the round (press()).
-  elBig.disabled = v.locked;
+  // The big dome stays LIVE while locked — the lock freezes setup, not the run.
+  elBig.disabled = false;
 
   if (v.mode === "down" && v.remainingMs !== null) setReadout(fmtDuration(v.remainingMs));
   else if (v.mode === "up") setReadout(fmtDuration(v.elapsedMs, true));
@@ -825,10 +825,11 @@ elDevice.addEventListener("pointerdown", (e) => {
   if (!elDevice.classList.contains("is-locked")) return;
   const t = e.target as HTMLElement;
   if (elLock.contains(t)) return;                    // the lock itself is always live
+  if (t.closest("#big-button")) return;              // the big dome is LIVE while locked — never scold it
   if (elRackArea.classList.contains("editing")) return;  // the programming panel is its own thing
   if (t.closest("#pull-tab")) return;                // the pull-tab handles its own locked guard
-  // a poke on any interactive device control while locked → scold
-  if (t.closest("#big-button,.skey,.timer-row,.rack-editor")) scoldLock();
+  // a poke on any FROZEN device control (the small keys, the rack) while locked → scold
+  if (t.closest(".skey,.timer-row,.rack-editor")) scoldLock();
 }, true);
 
 document.addEventListener("keydown", (e) => {
@@ -836,8 +837,7 @@ document.addEventListener("keydown", (e) => {
       !(e.target instanceof HTMLSelectElement) && !elCardEditor.open &&
       !elRackArea.classList.contains("editing")) {
     e.preventDefault();
-    if (elDevice.classList.contains("is-locked")) scoldLock();   // Space is a big-button poke
-    else elBig.click();
+    elBig.click();   // Space IS the big dome — live even while locked
   }
 });
 

@@ -446,9 +446,9 @@ button { font-family: inherit; }
   background: repeating-linear-gradient(45deg, #232219 0 6px, #2a2920 6px 12px);
   border: 1px dashed #3a392f; border-radius: 4px; }
 
-/* ── the PROGRAMMING PANEL: the plate's edit mode. Same plate, same 2x2 bones,
-   same socket material — the grid rewired into controls. Height is pinned to the
-   measured grid so the machine never changes size. ── */
+/* ── the PROGRAMMING PANEL: the plate's edit mode. Four quadrants in the exact
+   socket voice — LED dots, flat uppercase plate text, one warm lit state. Height
+   pinned to the measured grid so the machine never changes size. ── */
 .rack-editor {
   background: linear-gradient(180deg, #25241e, #1b1a15);
   border: 1px solid #100f0c; border-radius: 7px; padding: 6px;
@@ -459,51 +459,58 @@ button { font-family: inherit; }
 @keyframes re-in { from { opacity: .4; } }
 .rack-editor[hidden] { display: none; }
 .rack-area.editing .rack { display: none; }
-/* a quadrant = a socket */
+/* a quadrant IS a socket cell */
 .re-cell { min-width: 0; min-height: 0; border-radius: 4px; border: 1px solid #14130f;
   background: linear-gradient(180deg, #34332b, #2a2922);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
-  display: flex; align-items: center; justify-content: center; gap: 4px; padding: 4px 6px; }
-.re-name { flex-direction: column; align-items: stretch; justify-content: center; gap: 2px;
-  font-family: "Saira Condensed", sans-serif; font-size: 8px; font-weight: 700;
-  letter-spacing: .18em; color: #8a856f; cursor: text; }
-.re-name input { width: 100%; min-width: 0; font-family: "Share Tech Mono", monospace; font-size: 13px;
-  color: #ffd9cd; background: #14130f; border: 1px solid #0c0b08; border-radius: 3px;
-  padding: 3px 6px; box-shadow: inset 0 2px 4px rgba(0,0,0,.6); }
-.re-name input:focus { outline: 1px solid var(--vermilion-lo); }
-.re-name input::placeholder { color: #6a6555; }
-.re-modes { flex-direction: column; align-items: stretch; }
-.re-latch { flex: 1; font-family: "Share Tech Mono", monospace; font-size: 9px; letter-spacing: .06em;
-  color: #b9b3a0; text-transform: uppercase; cursor: pointer;
-  background: #201f19; border: 1px solid #14130f; border-radius: 3px; padding: 2px 4px; }
-.re-latch.on { background: linear-gradient(180deg, #45342c, #38291f); color: #ffd9cd;
-  box-shadow: inset 0 0 0 1px var(--vermilion-lo), inset 0 0 10px rgba(232,71,42,.25); }
-.re-steppers { transition: opacity .2s; }
-.re-steppers.disabled { opacity: .35; pointer-events: none; }
-.re-colon { font-family: "Share Tech Mono", monospace; color: #6a6555; font-size: 13px; }
-.re-unit { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
-.re-unit input { width: 38px; text-align: center; font-family: "Share Tech Mono", monospace;
-  font-size: 14px; color: #ffd9cd; background: #14130f; border: 1px solid #0c0b08;
-  border-radius: 3px; padding: 1px 0; box-shadow: inset 0 2px 4px rgba(0,0,0,.6);
+  display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 6px 9px; }
+.re-lbl { font-family: "Share Tech Mono", monospace; font-size: 9px; letter-spacing: .08em;
+  color: #7e7a6a; }
+/* typed text is plate text, not a box: amber mono on a dashed guide line */
+.re-in { width: 100%; min-width: 0; background: transparent; border: none;
+  border-bottom: 1px dashed #3a392f; border-radius: 0;
+  font-family: "Share Tech Mono", monospace; font-size: 13px; color: #ffd9cd;
+  padding: 1px 2px; }
+.re-in:focus { outline: none; border-bottom-color: var(--vermilion-lo); }
+.re-in::placeholder { color: #6a6555; }
+/* mode options: two mini rack-rows — dim LED or lit LED, like the grid itself */
+.re-opt { display: flex; align-items: center; gap: 8px; background: transparent; border: none;
+  padding: 1px 0; cursor: pointer; text-align: left; min-width: 0;
+  font-family: "Share Tech Mono", monospace; font-size: 11px; letter-spacing: .05em;
+  text-transform: uppercase; color: #7e7a6a; }
+.re-opt:hover { color: #b9b3a0; }
+.re-opt.on { color: #ffd9cd; }
+.re-opt.on .t-led, .re-opt .t-led.on {
+  background: radial-gradient(circle at 35% 30%, #ff8a6e, var(--vermilion));
+  box-shadow: 0 0 7px var(--vermilion), 0 0 2px #fff inset; }
+/* the time: bare amber digits with flat glyph arrows above/below */
+.re-time { display: flex; align-items: center; justify-content: center; gap: 7px; }
+#dur-fields.disabled .re-time { opacity: .35; pointer-events: none; }
+.re-colon { font-family: "Share Tech Mono", monospace; font-size: 13px; color: #6a6555; }
+.re-unit { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.re-unit input { width: 32px; text-align: center; background: transparent; border: none;
+  border-bottom: 1px dashed #3a392f; border-radius: 0;
+  font-family: "Share Tech Mono", monospace; font-size: 15px; color: #ffd9cd; padding: 0;
   -moz-appearance: textfield; appearance: textfield; }
 .re-unit input::-webkit-outer-spin-button, .re-unit input::-webkit-inner-spin-button {
   -webkit-appearance: none; margin: 0; }
-.re-unit input:focus { outline: 1px solid var(--vermilion-lo); }
-.re-step { width: 38px; font-size: 7px; line-height: 1; color: #b9b3a0; cursor: pointer;
-  background: #201f19; border: 1px solid #14130f; border-radius: 3px; padding: 2px 0;
-  touch-action: none; }
-.re-step:active { box-shadow: inset 0 2px 3px rgba(0,0,0,.55); }
-.re-actions { flex-direction: column; align-items: stretch; }
-.re-key { font-family: "Share Tech Mono", monospace; font-size: 9px; letter-spacing: .05em;
-  color: #b9b3a0; text-transform: uppercase; cursor: pointer; white-space: nowrap;
-  background: #201f19; border: 1px solid #14130f; border-radius: 3px; padding: 3px 6px;
-  overflow: hidden; text-overflow: ellipsis; }
-.re-key:active { box-shadow: inset 0 2px 3px rgba(0,0,0,.55); }
-.re-key.alarm { flex: 1; }
-.re-act-row { display: flex; gap: 4px; }
-.re-act-row .re-key { flex: 1; }
-.re-key.save { background: linear-gradient(180deg, #b8351d, #8f2916); color: #ffd9cd;
-  border-color: #5e1a0d; }
+.re-unit input:focus { outline: none; border-bottom-color: var(--vermilion-lo); }
+.re-step { background: transparent; border: none; padding: 0 8px; cursor: pointer;
+  font-size: 8px; line-height: 1.4; color: #6a6555; touch-action: none; }
+.re-step:hover { color: #ffd9cd; }
+.re-step:active { color: var(--vermilion); }
+/* action row: CANCEL is quiet plate text; SAVE wears the lit-cell treatment */
+.re-actions { justify-content: space-between; }
+.re-act-row { display: flex; gap: 5px; margin-top: 2px; }
+.re-key { flex: 1; background: transparent; border: 1px solid #3a392f; border-radius: 3px;
+  font-family: "Share Tech Mono", monospace; font-size: 10px; letter-spacing: .06em;
+  text-transform: uppercase; color: #7e7a6a; padding: 3px 4px; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.re-key:hover { color: #b9b3a0; }
+.re-key.save { color: #ffd9cd; border-color: transparent;
+  background: linear-gradient(180deg, #45342c, #38291f);
+  box-shadow: inset 0 0 0 1px var(--vermilion-lo), inset 0 0 10px rgba(232,71,42,.25); }
+.re-key.save:active { box-shadow: inset 0 0 0 1px var(--vermilion-lo), inset 0 2px 5px rgba(0,0,0,.5); }
 
 /* the CARD GATE in the chassis bottom: a labeled tab where 2xAAA used to be.
    Machine furniture, not a mini-card: darkened card color, silkscreen name, ⏏. */

@@ -510,7 +510,7 @@ async function slotCard(cardId        ) {
 // ── CARD GESTURES (the mock's, faithfully): a tap FLIPS the card over in a
 // three-beat lift→turn→settle; a mostly-UPWARD drag picks it up to drop on the
 // device; a horizontal move is left to the bench's native scroll. ──────────────
-const LIFT_GAP = 12;   // px of daylight above the binder while flipping
+const LIFT_GAP = 18;   // px of daylight above the binder while flipping
 const elBinder = $("deck");
 
 // REVIEW U2/U3: never trust transitionend as the only clock — a skipped or canceled
@@ -520,13 +520,19 @@ function onTopEnd(card             , fn            ) {
   const go = () => { if (!done) { done = true; card.removeEventListener("transitionend", h); fn(); } };
   const h = (e                 ) => { if (e.target === card && e.propertyName === "top") go(); };
   card.addEventListener("transitionend", h);
-  setTimeout(go, 320);
+  setTimeout(go, 700);   // safety net only — far past the 220ms travel, so the next
+                         // beat can never start while the card is still moving
 }
 function onFlipEnd(card             , fn            ) {
   let done = false;
-  const go = () => { if (!done) { done = true; fn(); } };
-  card.querySelector(".card-3d") .addEventListener("transitionend", go, { once: true });
-  setTimeout(go, 380);
+  const el3d = card.querySelector(".card-3d")               ;
+  const go = () => { if (!done) { done = true; el3d.removeEventListener("transitionend", h); fn(); } };
+  // ONLY the flip's own transform counts — the foil layers' transitions (opacity,
+  // facet vars) bubble up here and would end the beat early, starting the descent
+  // while the card is still turning
+  const h = (e                 ) => { if (e.target === el3d && e.propertyName === "transform") go(); };
+  el3d.addEventListener("transitionend", h);
+  setTimeout(go, 800);   // safety net only
 }
 
 // pin the card at its on-screen spot in viewport-fixed coords. PORTAL to <body> first:

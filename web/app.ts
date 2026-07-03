@@ -200,6 +200,62 @@ let alarmedFor: string | null = null; // timerId:sessionId we've already alarmed
 let lastChimeAt = 0;                  // last time the ringing chime re-played
 const CHIME_EVERY_MS = 5_000;         // chime begs until acknowledged; blip stays a one-shot nudge
 
+// ── the device wears the slotted card: tab in the slot, accent surfaces ──
+const elCardSlot = $("card-slot");
+const elSlotCard = $("slot-card");
+let lastSlottedId: string | null = null;
+function renderSlotTab(v: SlotView) {
+  if (!v.card) {
+    elCardSlot.classList.add("empty");
+    elDevice.style.removeProperty("--card-accent");
+    lastSlottedId = null;
+    return;
+  }
+  elCardSlot.classList.remove("empty");
+  elDevice.style.setProperty("--card-accent", v.card.color || "#6f7457");
+  elSlotCard.style.setProperty("--cat", v.card.color || "#6f7457");
+  $("sc-emblem").textContent = v.card.emblem?.trim() || ([...v.card.name][0]?.toUpperCase() ?? "★");
+  $("sc-name").textContent = v.card.name;
+  $("sc-cat").textContent = v.card.category ? v.card.category.toUpperCase() : "— ・ —";
+  if (v.card.id !== lastSlottedId) {           // a fresh insert rises out of the slot
+    lastSlottedId = v.card.id;
+    elSlotCard.classList.remove("inserting"); void elSlotCard.offsetWidth;
+    elSlotCard.classList.add("inserting");
+  }
+}
+// pull the card OUT: grab the tab, drag up past the threshold, it ejects
+let pull: { startY: number; id: number } | null = null;
+elSlotCard.addEventListener("pointerdown", (e) => {
+  if (elDevice.classList.contains("is-locked")) return;   // the lock holds the card in
+  pull = { startY: e.clientY, id: e.pointerId };
+  elSlotCard.classList.add("pulling");
+  elSlotCard.style.transition = "none";
+  try { elSlotCard.setPointerCapture?.(e.pointerId); } catch {}
+});
+elSlotCard.addEventListener("pointermove", (e) => {
+  if (!pull || e.pointerId !== pull.id) return;
+  const dy = Math.max(-72, Math.min(0, e.clientY - pull.startY));
+  elSlotCard.style.transform = `translateY(${dy}px)`;
+});
+async function endPull(e: PointerEvent) {
+  if (!pull || e.pointerId !== pull.id) return;
+  const dy = e.clientY - pull.startY;
+  pull = null;
+  elSlotCard.classList.remove("pulling");
+  if (dy < -44) {                               // pulled free → eject
+    elSlotCard.style.transition = ""; elSlotCard.style.transform = "";
+    elSlotCard.classList.add("pulled");
+    sndEject();
+    await dev.eject();
+    setTimeout(async () => { elSlotCard.classList.remove("pulled"); await renderAll(); }, 260);
+  } else {                                      // not far enough → springs back
+    elSlotCard.style.transition = "transform .18s ease";
+    elSlotCard.style.transform = "";
+  }
+}
+elSlotCard.addEventListener("pointerup", endPull);
+elSlotCard.addEventListener("pointercancel", endPull);
+
 // ── render ──────────────────────────────────────────────────────
 async function renderDevice() {
   const v: SlotView = await dev.view();
@@ -216,6 +272,7 @@ async function renderDevice() {
   } else elDayCount.hidden = true;
 
   setLamps(v.state, v.locked, v.alarmStyle);
+  renderSlotTab(v);
   // a mode override only survives while ITS timer sits ready
   if (modeOverride && (v.state !== "ready" || v.timer?.id !== modeOverride.timerId)) modeOverride = null;
   elMode.disabled = v.locked || v.state !== "ready" || !v.timer;

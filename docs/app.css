@@ -394,7 +394,7 @@ button { font-family: inherit; }
 #device.finished .bigbtn-label { color: var(--vermilion-lo); }
 
 /* side keys */
-.side { display: flex; flex-direction: column; gap: 9px; }
+.side { display: flex; flex-direction: column; gap: 9px; justify-content: flex-start; }
 .skey {
   font-family: "Saira Condensed", sans-serif; font-weight: 700; letter-spacing: .12em;
   font-size: 12px; text-transform: uppercase; color: var(--ink);
@@ -464,6 +464,18 @@ button { font-family: inherit; }
   color: rgba(255,250,225,.05);
   text-shadow: 0 1px 0 rgba(0,0,0,.5), 0 -1px 0 rgba(255,255,255,.04); }
 .timer-row.socket:hover { background: repeating-linear-gradient(45deg, #1f1e18 0 6px, #24231c 6px 12px); }
+/* the QUICK-TIMER LAUNCHER bays: live sockets that start a stopwatch/countdown */
+.timer-row.launch { flex-direction: row; align-items: center; gap: 9px; cursor: pointer;
+  min-height: 52px; padding: 8px 11px;
+  background: linear-gradient(180deg, #34332b, #2a2922); }
+.timer-row.launch:hover { background: linear-gradient(180deg, #3f342b, #33281f); }
+.timer-row.launch:hover .lc-glyph { color: #ff8a6e; text-shadow: 0 0 8px var(--vermilion); }
+.timer-row.launch .lc-glyph { font-size: 18px; color: #b9a86e; flex: 0 0 auto;
+  transition: color .12s, text-shadow .12s; }
+.timer-row.launch .lc-label { font-family: "Share Tech Mono", monospace; font-size: 12px;
+  letter-spacing: .06em; color: #d8d2c1; }
+.timer-row.launch .lc-jp { font-family: "Zen Kaku Gothic New", sans-serif; font-size: 8px;
+  color: #7e7a6a; margin-left: auto; }
 .timer-row:hover { background: linear-gradient(180deg, #3c3b32, #302f27); }
 .t-led { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto;
   background: #4a3f2e; box-shadow: inset 0 0 2px #000; }

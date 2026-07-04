@@ -278,19 +278,17 @@ async function renderDevice() {
     elPullTab.hidden = true;
     $("fs-batt").hidden = false;
   }
-  // a mode override only survives while ITS timer sits ready
-  if (modeOverride && (v.state !== "ready" || v.timer?.id !== modeOverride.timerId)) modeOverride = null;
-  elMode.disabled = v.locked || v.state !== "ready" || !v.timer;
 
   if (v.state === "empty") {
     elCardName.textContent = "— NO CARD —"; elCardName.classList.add("empty");
     elTimerName.textContent = "—";
     setReadout("--:--");
-    elSub.textContent = "⏏ ejected ・ insert a card";
+    elSub.textContent = "slot a card ・ or start a quick timer";
     elBigLabel.textContent = "●"; elBigWord.textContent = "—";
     elBig.disabled = true; elStop.disabled = elFinish.disabled = elReset.disabled = true;
-    elMode.disabled = true;
-    elTimers.hidden = true;
+    // the machine can't shrink: the rack stays, now a QUICK-TIMER LAUNCHER
+    elTimers.hidden = false;
+    renderLauncher();
     return;
   }
   elCardName.classList.remove("empty");
@@ -308,17 +306,13 @@ async function renderDevice() {
     return;
   }
   // The LCD's mode line reads the direction of time, like the mock ("COUNTDOWN ▼");
-  // the active timer's NAME lives on the lit rack row below. A one-off MODE
-  // override shows as ONCE until the next start consumes it.
-  const shownMode = modeOverride ? modeOverride.mode : v.timer.mode;
-  elTimerName.innerHTML = (shownMode === "down" ? "COUNTDOWN <b>▼</b>" : "STOPWATCH <b>▲</b>")
-    + (modeOverride ? " ・ ONCE" : "");
+  // the active timer's NAME lives on the lit rack row below.
+  elTimerName.innerHTML = v.timer.mode === "down" ? "COUNTDOWN <b>▼</b>" : "STOPWATCH <b>▲</b>";
   // The big dome stays LIVE while locked — the lock freezes setup, not the run.
   elBig.disabled = false;
 
   if (v.mode === "down" && v.remainingMs !== null) setReadout(fmtDuration(v.remainingMs));
   else if (v.mode === "up") setReadout(fmtDuration(v.elapsedMs, true));
-  else if (modeOverride) setReadout(modeOverride.mode === "down" ? fmtDuration(modeOverride.targetMs ?? 0) : "00:00.00");
   else setReadout(v.timer.mode === "down" && v.timer.targetMs ? fmtDuration(v.timer.targetMs) : "00:00.00");
 
   elBigLabel.textContent = v.state === "finished" ? "↻" : (GLYPH[bigButtonAction(v.state)] ?? "●");
@@ -366,6 +360,50 @@ function renderTimerList(v: SlotView) {
     if (v.card) socket.dataset.emblem = v.card.emblem?.trim() || ([...v.card.name][0]?.toUpperCase() ?? "");
     elTimerList.appendChild(socket);
   }
+}
+
+// ── the QUICK-TIMER LAUNCHER: with no card, the 2x2 rack offers two live bays
+// (start a stopwatch / start a countdown). The machine can't shrink, so the
+// physical plate is always here — it just does the right thing when empty. ──
+const QUICK_ID = "quick";
+async function getQuickCard(): Promise<Card> {
+  return (await dev.getCard(QUICK_ID))
+    ?? await dev.createCard("Quick", { id: QUICK_ID, emblem: "⚡", color: "#8a8577", category: "quick" });
+}
+/** Start (or set up) a quick timer with no card: uses the auto "Quick" card. */
+async function quickStart(mode: TimerMode) {
+  const card = await getQuickCard();
+  await dev.slot(card.id);
+  if (mode === "up") {
+    // reuse the card's seeded stopwatch (createCard makes one), or add one
+    const timers = await dev.listTimers(card.id);
+    let sw = timers.find(t => t.mode === "up");
+    if (!sw) sw = await dev.addTimer(card.id, { name: "Stopwatch", mode: "up" });
+    await dev.switchTimer(sw.id);
+    await dev.press();            // start counting up immediately
+    sndThunk();
+    await renderAll();
+  } else {
+    // countdown needs a length — open the programming panel, start on save
+    await renderAll();            // now a card is slotted; the rack is a real 2x2
+    openTimerEditor(card.id, null, { forceMode: "down", startOnSave: true });
+  }
+}
+function renderLauncher() {
+  elTimerList.innerHTML = "";
+  $("rack-count").textContent = "⚡ QUICK";
+  const bay = (cls: string, glyph: string, label: string, jp: string, onClick: () => void) => {
+    const li = el("li", `timer-row launch ${cls}`) as HTMLLIElement;
+    li.append(el("span", "lc-glyph", glyph), el("span", "lc-label", label), el("span", "lc-jp", jp));
+    li.onclick = onClick;
+    return li;
+  };
+  elTimerList.append(
+    bay("up", "▶", "STOPWATCH", "ストップウォッチ", () => quickStart("up")),
+    bay("down", "⧖", "COUNTDOWN", "カウントダウン", () => quickStart("down")),
+    el("li", "timer-row socket"),
+    el("li", "timer-row socket"),
+  );
 }
 
 function timerRow(t: Timer, activeId: string | null): HTMLLIElement {
@@ -785,22 +823,8 @@ elBinderPage.addEventListener("scroll", () => {
   });
 }, { passive: true });
 
-// ── MODE key: override the NEXT run's mode, once (the engine's press(opts)) ──
-const elMode = $<HTMLButtonElement>("mode");
-let modeOverride: { timerId: string; mode: TimerMode; targetMs: number | null } | null = null;
-elMode.onclick = async () => {
-  sndClick();
-  const v = await dev.view();
-  if (v.state !== "ready" || !v.timer || v.locked) return;
-  if (modeOverride) modeOverride = null;   // toggle back to the timer's own mode
-  else if (v.timer.mode === "down") modeOverride = { timerId: v.timer.id, mode: "up", targetMs: null };
-  else modeOverride = { timerId: v.timer.id, mode: "down",
-    targetMs: v.timer.targetMs ?? v.card?.defaultTargetMs ?? 25 * 60_000 };
-  await renderDevice();
-};
-
 // ── device interactions (each key clicks like the mock's) ───────
-elBig.onclick = async () => { sndDome(); await dev.press(modeOverride ?? {}); modeOverride = null; await renderAll(); };
+elBig.onclick = async () => { sndDome(); await dev.press(); await renderAll(); };
 elStop.onclick = async () => { sndClick(); await dev.stop(); await renderAll(); };          // freeze & keep
 elFinish.onclick = async () => { sndBank(); alarmedFor = null; await dev.finish(); await renderAll(); }; // bank to history
 elReset.onclick = async () => { sndClick(); alarmedFor = null; await dev.reset(); await renderAll(); }; // discard
@@ -986,13 +1010,14 @@ $("t-alarm-key").onclick = () => {
   playAlarm(editAlarm);
 };
 
-function openTimerEditor(cardId: string, timer: Timer | null) {
+function openTimerEditor(cardId: string, timer: Timer | null, opts: { forceMode?: TimerMode; startOnSave?: boolean } = {}) {
   timerEditorCardId = cardId;
   editingTimerId = timer?.id ?? null;
+  startOnSave = !!opts.startOnSave;   // the launcher: create the timer AND start it on save
   // the plate must not change size: pin the editor to the grid's measured height
   elRackEditor.style.height = `${elTimerList.getBoundingClientRect().height}px`;
   $<HTMLInputElement>("t-name").value = timer?.name ?? "";
-  editMode = timer?.mode ?? "up";
+  editMode = opts.forceMode ?? timer?.mode ?? "up";
   writeDurationMs(timer?.targetMs ?? null);
   editAlarm = timer?.alarmStyle ?? "chime";
   $("t-alarm-key").textContent = ALARM_LABEL[editAlarm];
@@ -1004,8 +1029,9 @@ function openTimerEditor(cardId: string, timer: Timer | null) {
 function closeTimerEditor() {
   elRackArea.classList.remove("editing");
   elRackEditor.hidden = true;
-  editingTimerId = null; timerEditorCardId = null;
+  editingTimerId = null; timerEditorCardId = null; startOnSave = false;
 }
+let startOnSave = false;
 $("t-cancel").onclick = () => { sndClick(); closeTimerEditor(); };
 $("t-save").onclick = async () => {
   const name = $<HTMLInputElement>("t-name").value.trim();
@@ -1015,6 +1041,7 @@ $("t-save").onclick = async () => {
   const mode: TimerMode = targetMs > 0 ? "down" : editMode === "down" ? "down" : "up";
   const finalTarget = mode === "down" ? targetMs : null;
   if (mode === "down" && !finalTarget) { alert("Set a countdown length greater than zero (h / m / s)."); return; }
+  const launch = startOnSave;
   sndClick();
   if (editingTimerId) {
     await dev.configureTimer(editingTimerId, { name: name || undefined, mode, targetMs: finalTarget, alarmStyle: editAlarm });
@@ -1022,6 +1049,7 @@ $("t-save").onclick = async () => {
     try {
       const t = await dev.addTimer(timerEditorCardId, { name, mode, targetMs: finalTarget, alarmStyle: editAlarm });
       await dev.switchTimer(t.id); // make the new timer active
+      if (launch) { await dev.press(); sndDome(); }   // launcher: start the quick countdown immediately
     } catch (err) { alert(String(err instanceof Error ? err.message : err)); }
   }
   closeTimerEditor();

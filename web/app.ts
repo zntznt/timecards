@@ -39,9 +39,8 @@ const elReadout = $("readout");
 const elSub = $("sub");
 const elBig = $<HTMLButtonElement>("big-button");
 const elBigLabel = $("big-label");
-const elStop = $<HTMLButtonElement>("stop");
-const elFinish = $<HTMLButtonElement>("finish");
-const elReset = $<HTMLButtonElement>("reset");
+const elFinish = $<HTMLButtonElement>("finish");   // the SAVE key (banks to history)
+const elReset = $<HTMLButtonElement>("reset");     // the DISCARD key (throws the run away)
 const elLock = $<HTMLButtonElement>("lock-toggle");
 const elTimers = $("timers");
 const elTimerList = $("timer-list");
@@ -286,7 +285,7 @@ async function renderDevice() {
     setReadout("--:--");
     elSub.textContent = "slot a card ・ or start a quick timer";
     elBigLabel.textContent = "●"; elBigWord.textContent = "—";
-    elBig.disabled = true; elStop.disabled = elFinish.disabled = elReset.disabled = true;
+    elBig.disabled = true; elFinish.disabled = elReset.disabled = true;
     // the machine can't shrink: the rack stays, now a QUICK-TIMER LAUNCHER
     elTimers.hidden = false;
     renderLauncher();
@@ -303,7 +302,7 @@ async function renderDevice() {
     setReadout("--:--");
     elSub.textContent = "add a timer to begin";
     elBigLabel.textContent = "●"; elBigWord.textContent = "—";
-    elBig.disabled = true; elStop.disabled = elFinish.disabled = elReset.disabled = true;
+    elBig.disabled = true; elFinish.disabled = elReset.disabled = true;
     return;
   }
   // The LCD's mode line reads the direction of time, like the mock ("COUNTDOWN ▼");
@@ -325,18 +324,17 @@ async function renderDevice() {
   // The label tells the truth about THIS press (mock review C1/U10: no static START/STOP lie).
   elBigWord.textContent = v.state === "finished" ? "REPEAT" : (WORD[bigButtonAction(v.state)] ?? "—");
 
-  // stop = freeze a RUNNING timer; finish = bank any live run to history;
-  // reset = discard any live run (running/paused/finished).
+  // the dome pauses/resumes; the two end keys are SAVE (bank to history) and
+  // DISCARD (throw the run away). Both need a live run to act on.
   const hasRun = v.state === "running" || v.state === "paused" || v.state === "finished";
-  elStop.disabled = v.locked || v.state !== "running";
   elFinish.disabled = v.locked || !hasRun;
   elReset.disabled = v.locked || !hasRun;
 
   if (v.state === "ready") { elSub.textContent = "press to start"; }
   else if (v.state === "running") { elSub.textContent = v.mode === "down" ? "▾ counting down" : "▴ counting up"; }
-  else if (v.state === "paused") { elSub.textContent = "❚❚ paused"; }
+  else if (v.state === "paused") { elSub.textContent = "❚❚ paused · press to resume · save or discard"; }
   else if (v.state === "finished") {
-    elSub.textContent = "time's up, round saved · press ↻ to repeat · reset to clear";
+    elSub.textContent = "time's up, round saved · press ↻ to repeat · discard to clear";
     const key = v.timer.id + ":" + (v.timer.liveSession?.id ?? "");
     if (alarmedFor !== key) { alarmedFor = key; lastChimeAt = Date.now(); playAlarm(v.alarmStyle); }
     else if (v.alarmStyle !== "blip" && v.alarmStyle !== "silent" && Date.now() - lastChimeAt >= CHIME_EVERY_MS) {
@@ -831,7 +829,6 @@ elBinderPage.addEventListener("scroll", () => {
 
 // ── device interactions (each key clicks like the mock's) ───────
 elBig.onclick = async () => { sndDome(); await dev.press(); await renderAll(); };
-elStop.onclick = async () => { sndClick(); await dev.stop(); await renderAll(); };          // freeze & keep
 elFinish.onclick = async () => { sndBank(); alarmedFor = null; await dev.finish(); await renderAll(); }; // bank to history
 elReset.onclick = async () => { sndClick(); alarmedFor = null; await dev.reset(); await renderAll(); }; // discard
 elLock.onclick = async () => { sndLatch(); await dev.lock(); await renderDevice(); };

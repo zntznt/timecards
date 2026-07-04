@@ -393,8 +393,14 @@ button { font-family: inherit; }
 .bigbtn-label { font-size: 11px; font-weight: 700; letter-spacing: .18em; color: var(--ink-soft); }
 #device.finished .bigbtn-label { color: var(--vermilion-lo); }
 
-/* side keys — one key per column, centered against the dome */
-.side { display: flex; flex-direction: column; gap: 9px; justify-content: center; }
+/* side keys — key on top, a debossed thumb-shelf filling below it. The column
+   stretches to the grid row (the dome-wrap sets it), so the shelf takes the
+   leftover slack and adding it never grows the control deck. */
+.side { display: flex; flex-direction: column; gap: 9px; align-items: stretch; align-self: stretch; }
+.thumb-rest { flex: 1 1 auto; min-height: 22px; border-radius: 10px; pointer-events: none;
+  background: linear-gradient(180deg, #d0c7ac, var(--shell-hi));
+  box-shadow: inset 0 2px 4px rgba(0,0,0,.16), inset 0 -1px 0 rgba(255,255,255,.45),
+    inset -1px 0 2px rgba(0,0,0,.06); }
 .skey {
   font-family: "Saira Condensed", sans-serif; font-weight: 700; letter-spacing: .12em;
   font-size: 12px; text-transform: uppercase; color: var(--ink);

@@ -303,7 +303,8 @@ button { font-family: inherit; }
   background: linear-gradient(180deg, rgba(255,255,255,.16), transparent);
   pointer-events: none;
 }
-.lcd-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+/* FIXED height = the tallest state (carded: 3-line right stack). Empty fills the same box, so the LCD never resizes. */
+.lcd-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 6px; height: 50px; }
 .lcd-card-wrap { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
 .lcd-emblem { font-style: normal; font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 900;
   font-size: 14px; color: var(--lcd-dark); opacity: .85; flex: 0 0 auto;
@@ -324,8 +325,10 @@ button { font-family: inherit; }
   font-weight: 600; text-transform: uppercase; flex: 0 1 auto; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; }
 .lcd-mode b { color: var(--vermilion-lo); }
+/* the daycount lives on a reserved row so the readout never shifts whether or not a card carries a deadline */
 .daycount { text-align: center; font-size: 11px; letter-spacing: .12em; color: var(--lcd-dark);
-  opacity: .8; font-weight: 600; text-transform: uppercase; }
+  opacity: .8; font-weight: 600; text-transform: uppercase; min-height: 15px; }
+.daycount[hidden] { display: block; visibility: hidden; }
 .daycount.passed { color: var(--vermilion-lo); opacity: 1; }
 .readout {
   font-family: "Share Tech Mono", monospace;
@@ -586,16 +589,13 @@ button { font-family: inherit; }
   transition: transform .15s ease;
 }
 .pull-tab:active { cursor: grabbing; }
-.pull-tab[hidden] { display: none; }
 .pull-tab i { font-style: normal; }
-#pt-emblem { font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 900; font-size: 11px;
-  line-height: 1; color: #fff6ec; text-shadow: 0 1px 1px rgba(0,0,0,.6); }
 #pt-name { font-family: "Saira Condensed", sans-serif; font-weight: 700; font-size: 10px;
   letter-spacing: .14em; text-transform: uppercase; color: #fff6ec;
-  text-shadow: 0 1px 1px rgba(0,0,0,.6);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  text-shadow: 0 1px 1px rgba(0,0,0,.6); }
 .pt-eject { font-size: 9px; color: rgba(255,246,236,.75); flex: 0 0 auto; }
-#fs-batt[hidden] { display: none; }
+/* nothing slotted: same EJECT tab, dimmed and inert (nothing to eject) */
+.pull-tab.empty { opacity: .62; cursor: default; }
 
 .footstamp { display: flex; justify-content: space-between; align-items: center; margin: 10px 8px 2px;
   min-height: 22px;

@@ -206,6 +206,7 @@ let liveUpSession                 = null;  // the running count-up session, for 
 const elPullTab = $                   ("pull-tab");
 let tabPull                                        = null;
 elPullTab.addEventListener("pointerdown", (e) => {
+  if (elPullTab.classList.contains("empty")) return;                       // nothing slotted — the gate is inert
   if (elDevice.classList.contains("is-locked")) { scoldLock(); return; }   // the lock holds the card in
   tabPull = { startY: e.clientY, id: e.pointerId };
   elPullTab.style.transition = "none";
@@ -234,7 +235,7 @@ elPullTab.addEventListener("pointerup", endTabPull);
 elPullTab.addEventListener("pointercancel", endTabPull);
 // keyboard activation (click events with no pointer) ejects too
 elPullTab.addEventListener("click", async (e) => {
-  if (e.detail !== 0 || elDevice.classList.contains("is-locked")) return;
+  if (e.detail !== 0 || elPullTab.classList.contains("empty") || elDevice.classList.contains("is-locked")) return;
   sndEject(); await dev.eject(); await renderAll();
 });
 
@@ -265,18 +266,14 @@ async function renderDevice() {
     $("lcd-today").textContent = `TODAY ${fmtDuration((todayBanked.get(v.card.id) ?? 0) + live)}`;
     $("lcd-stars").textContent = rarityFor((allBanked.get(v.card.id) ?? 0) + live);
     elDevice.dataset.tx = v.card.texture && TEXTURES.includes(v.card.texture) ? v.card.texture : "cosmos";
-    $("pt-emblem").textContent = v.card.emblem?.trim() || ([...v.card.name][0]?.toUpperCase() ?? "");
-    $("pt-name").textContent = v.card.name;
-    elPullTab.hidden = false;
-    $("fs-batt").hidden = true;
+    elPullTab.classList.remove("empty");   // a card is in: the gate is live (still just reads EJECT)
   } else {
     elDevice.style.removeProperty("--card-accent");
     $("lcd-emblem").textContent = "";
     $("lcd-today").textContent = "";
     $("lcd-stars").textContent = "";
     delete elDevice.dataset.tx;
-    elPullTab.hidden = true;
-    $("fs-batt").hidden = false;
+    elPullTab.classList.add("empty");      // nothing slotted: same EJECT tab, but inert
   }
 
   if (v.state === "empty") {

@@ -201,6 +201,7 @@ function sndSheet(dir         = 1) {
 let alarmedFor                = null; // timerId:sessionId we've already alarmed
 let lastChimeAt = 0;                  // last time the ringing chime re-played
 const CHIME_EVERY_MS = 5_000;         // chime begs until acknowledged; blip stays a one-shot nudge
+let liveUpSession                 = null;  // the running count-up session, for the rAF hundredths
 
 // ── the pull-tab at the device's bottom center: pull DOWN to take the card out ──
 const elPullTab = $                   ("pull-tab");
@@ -314,6 +315,11 @@ async function renderDevice() {
   if (v.mode === "down" && v.remainingMs !== null) setReadout(fmtDuration(v.remainingMs));
   else if (v.mode === "up") setReadout(fmtDuration(v.elapsedMs, true));
   else setReadout(v.timer.mode === "down" && v.timer.targetMs ? fmtDuration(v.timer.targetMs) : "00:00.00");
+
+  // a RUNNING count-up shows hundredths — drive those from rAF (the 10x/sec device
+  // tick is too coarse: it made the centiseconds jump in steps of ~10). Cache the
+  // live session so the frame loop can recompute elapsed with the engine's formula.
+  liveUpSession = (v.state === "running" && v.mode === "up") ? (v.timer.liveSession ?? null) : null;
 
   elBigLabel.textContent = v.state === "finished" ? "↻" : (GLYPH[bigButtonAction(v.state)] ?? "●");
   // The label tells the truth about THIS press (mock review C1/U10: no static START/STOP lie).
@@ -1398,12 +1404,22 @@ function escapeHtml(s        )         {
   return s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] ));
 }
 
-// ── tick: re-render the running readout 10×/sec so hundredths move ──
+// ── device tick: re-render 10×/sec so a running/finished readout advances ──
 // (a printed report is a frozen snapshot — it never re-renders; the device below
-// the paper keeps ticking, as a real appliance would)
+// the paper keeps ticking, as a real appliance would). This handles the countdown
+// seconds and all state; the count-up HUNDREDTHS are driven by rAF below.
 setInterval(async () => {
   const v = await dev.view();
   if (v.state === "running" || v.state === "finished") await renderDevice();
 }, 100);
+
+// ── the stopwatch's hundredths, at display refresh rate ──
+// Recompute elapsed with the engine's exact formula from the cached live session,
+// so the centiseconds run smoothly instead of jumping in ~10-step increments.
+function readoutFrame() {
+  if (liveUpSession) setReadout(fmtDuration(elapsed(liveUpSession, Date.now()), true));
+  requestAnimationFrame(readoutFrame);
+}
+requestAnimationFrame(readoutFrame);
 
 await renderAll();

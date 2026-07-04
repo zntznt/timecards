@@ -393,8 +393,28 @@ button { font-family: inherit; }
 .bigbtn-label { font-size: 11px; font-weight: 700; letter-spacing: .18em; color: var(--ink-soft); }
 #device.finished .bigbtn-label { color: var(--vermilion-lo); }
 
-/* side keys */
-.side { display: flex; flex-direction: column; gap: 9px; justify-content: flex-start; }
+/* side keys — the column: plaque up top, key centered, thumb-shelf below */
+.side { display: flex; flex-direction: column; align-items: stretch; justify-content: space-between; }
+/* ── silent embossed plaques (dead moldings — no data, no light, no behavior) ── */
+.fl-plate { display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 4px 2px; text-align: center; pointer-events: none; user-select: none;
+  color: color-mix(in srgb, var(--ink-soft) 82%, var(--shell-lo)); }
+.fl-plate .fl-micro { font-family: "Share Tech Mono", monospace; font-size: 7px; letter-spacing: .16em;
+  color: color-mix(in srgb, var(--ink-soft) 60%, var(--shell)); }
+/* the deboss illusion: dark shadow above the glyph, a bright shell highlight below */
+.fl-plate span { text-shadow: 0 -0.5px 0 rgba(0,0,0,.22), 0 1px 0 rgba(255,255,255,.55); }
+.fl-maker .fl-mark { font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 900; font-size: 17px;
+  line-height: 1; }
+.fl-maker .fl-kanji { font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 700; font-size: 10px;
+  letter-spacing: .1em; }
+.fl-data .fl-model { font-family: "Saira Condensed", sans-serif; font-weight: 700; font-size: 12px;
+  letter-spacing: .16em; }
+.fl-data .fl-serial { font-family: "Share Tech Mono", monospace; font-size: 9px; letter-spacing: .1em; }
+/* a debossed thumb-shelf: a soft molded groove where a resting thumb lands, off the keys */
+.thumb-rest { height: 40px; border-radius: 10px; pointer-events: none;
+  background: linear-gradient(180deg, #d0c7ac, var(--shell-hi));
+  box-shadow: inset 0 2px 4px rgba(0,0,0,.16), inset 0 -1px 0 rgba(255,255,255,.45),
+    inset -1px 0 2px rgba(0,0,0,.06); }
 .skey {
   font-family: "Saira Condensed", sans-serif; font-weight: 700; letter-spacing: .12em;
   font-size: 12px; text-transform: uppercase; color: var(--ink);

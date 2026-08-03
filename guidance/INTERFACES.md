@@ -33,9 +33,12 @@ timecards slot --nfc 04:A2:B1:C3 --json
 A working reference driver ships in **`integrations/pi/`** (`timecards_pi.py` +
 README + an off-Pi self-check). It's pure glue: a GPIO button (tap = `press`, hold =
 `stop`), a status LED driven from `status --json`, and an optional PN532-over-I2C NFC
-reader that calls `slot --nfc <uid>` on tap (degrades to button-only if absent). It
-shells out to the CLI — never reimplements timer logic — so it can't drift from the
-app. See `integrations/pi/README.md` for wiring + systemd autostart.
+reader that calls `slot --nfc <uid>` on tap. Two further optional parts: a passive
+buzzer that sounds on the rising edge of `finished`, patterned by `alarmStyle`, and a
+second button that cycles `timer switch` through the card's timers. Every part beyond
+the button and LED degrades to "absent" if unwired. It shells out to the CLI — never
+reimplements timer logic — so it can't drift from the app. See
+`integrations/pi/README.md` for parts, wiring + systemd autostart.
 
 The `~/.timecards/data.db` file is the shared truth between the Pi and the CLI. The
 web UI keeps its data in the browser's IndexedDB and does NOT share it; bridge them

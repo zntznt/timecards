@@ -14,6 +14,10 @@ remain the single source of truth, so the Pi can never disagree with the app.
   LED               <- timecards status --json   (running=on, paused=blink slow,
                                                   finished=blink fast, else off)
 
+Optional extras — each degrades to "absent" if you haven't wired it:
+  Timer button (tap)-> timecards timer switch <next timer on the card>
+  Buzzer            <- beeps when `finished` goes true, patterned by alarmStyle
+
 Setup, wiring, and autostart: see README.md in this folder.
 """
 
@@ -33,6 +37,10 @@ LED_PIN = 27             # BCM pin for the status LED (through a resistor to GND
 HOLD_SECONDS = 1.5       # button hold time that means "stop"
 POLL_SECONDS = 0.25      # how often to refresh the LED from CLI state
 NFC_POLL_SECONDS = 0.3   # how often to scan for an NFC tag
+
+# Optional extras. Set either to None if you haven't wired that part.
+TIMER_BUTTON_PIN = 22    # BCM pin for the "next timer" button, or None
+BUZZER_PIN = 18          # BCM pin for a passive buzzer, or None
 
 # ── CLI bridge ──────────────────────────────────────────────────────
 def cli(*args, want_json=False):
@@ -75,6 +83,44 @@ def led_pattern(state: str):
     }.get(state, (0.0, 1.0))      # empty/unknown -> off
 
 
+# ── Timer cycling: which timer does the second button select? ───────
+def next_timer_id(view):
+    """Given a SlotView, return the id of the timer AFTER the active one
+    (wrapping), or None if there's nothing to switch to.
+
+    The core owns what switching *means* (it suspends the current timer and
+    resumes the target). We only pick the target — hence pure, hence testable."""
+    timers = (view or {}).get("timers") or []
+    if len(timers) < 2:
+        return None                       # 0 or 1 timer — nothing to cycle to
+    active = (view or {}).get("timer") or {}
+    active_id = active.get("id")
+    ids = [t.get("id") for t in timers]
+    if active_id not in ids:
+        return ids[0]                     # no/unknown active timer -> first
+    return ids[(ids.index(active_id) + 1) % len(ids)]
+
+
+# ── Buzzer: alarmStyle -> a sequence of (frequency_hz, seconds) ─────
+# frequency 0 means "rest". Styles come from AlarmStyle in core/types.ts;
+# an unknown style falls back to "chime" so a new style is never silent by accident.
+ALARM_PATTERNS = {
+    "chime":   [(880, 0.18), (0, 0.06), (659, 0.32)],
+    "blip":    [(1200, 0.08)],
+    "digital": [(1046, 0.09), (0, 0.05)] * 3,
+    "bell":    [(784, 0.12), (0, 0.04)] * 4,
+    "melody":  [(659, 0.14), (784, 0.14), (988, 0.14), (1319, 0.28)],
+    "silent":  [],
+}
+
+
+def alarm_pattern(style: str):
+    """Beep sequence for an alarmStyle. 'silent' -> [] (no sound, LED still blinks)."""
+    if style == "silent":
+        return []
+    return ALARM_PATTERNS.get(style, ALARM_PATTERNS["chime"])
+
+
 # ── Main loop ───────────────────────────────────────────────────────
 def main():
     # GPIO is imported here so the module can be unit-tested off-Pi.
@@ -102,6 +148,32 @@ def main():
     button.when_held = on_held
     button.when_released = on_released
 
+    # Optional second button: cycle to the next timer on the slotted card.
+    # The core refuses the switch when the slot is locked — we don't re-check that here.
+    # NOTE: `timer_button` must stay referenced for the life of the loop; gpiozero
+    # collects Button objects that go out of scope and the button silently dies.
+    timer_button = None
+    if TIMER_BUTTON_PIN is not None:
+        def on_timer_button():
+            nxt = next_timer_id(status())
+            if nxt is None:
+                print("[timecards] timer button -> no other timer on this card")
+                return
+            print(f"[timecards] timer button -> switch {nxt}")
+            cli("timer", "switch", nxt)
+
+        try:
+            timer_button = Button(TIMER_BUTTON_PIN, pull_up=True)
+            timer_button.when_pressed = on_timer_button
+            print(f"[timecards] timer button on GPIO{TIMER_BUTTON_PIN}")
+        except Exception as e:                    # pragma: no cover - hardware path
+            print(f"[timecards] timer button init failed ({e}); continuing without it",
+                  file=sys.stderr)
+
+    buzzer = try_init_buzzer()
+    if buzzer:
+        print(f"[timecards] buzzer on GPIO{BUZZER_PIN}")
+
     nfc = try_init_nfc()
     if nfc:
         print("[timecards] NFC reader ready — tap a tag to slot its card")
@@ -114,10 +186,20 @@ def main():
     last_uid = None
     last_nfc_scan = 0.0
     blink_phase = 0.0
+    was_finished = False
     try:
         while True:
+            view = status()
+            st = view.get("state", "empty")
+
+            # Alarm on the RISING edge of `finished` only — the flag stays true
+            # while the finished state is held, and we must not re-beep every poll.
+            finished = bool(view.get("finished"))
+            if finished and not was_finished:
+                play_alarm(buzzer, alarm_pattern(view.get("alarmStyle", "chime")))
+            was_finished = finished
+
             # LED reflects current state.
-            st = status().get("state", "empty")
             on_frac, cycle = led_pattern(st)
             # software PWM-ish blink without extra threads
             blink_phase = (blink_phase + POLL_SECONDS) % cycle if cycle else 0
@@ -138,7 +220,45 @@ def main():
             time.sleep(POLL_SECONDS)
     except KeyboardInterrupt:
         led.off()
+        if buzzer:
+            buzzer.value = 0
         print("\n[timecards] bye")
+
+
+# ── Buzzer (passive, on a PWM-capable pin) — optional ───────────────
+def try_init_buzzer():
+    """Return a PWMOutputDevice for a passive buzzer, or None if not wired/available.
+    A passive buzzer needs a square wave to make a pitch, which is what PWM gives us."""
+    if BUZZER_PIN is None:
+        return None
+    try:
+        from gpiozero import PWMOutputDevice     # type: ignore
+    except ImportError:
+        return None
+    try:
+        return PWMOutputDevice(BUZZER_PIN, frequency=440, initial_value=0)
+    except Exception as e:                        # pragma: no cover - hardware path
+        print(f"[timecards] buzzer init failed ({e}); continuing silent", file=sys.stderr)
+        return None
+
+
+def play_alarm(buzzer, pattern):
+    """Play a (freq_hz, seconds) sequence. No-op without a buzzer or an empty pattern.
+    Blocking, but patterns are well under a second — deliberately no threads, to match
+    the rest of this loop."""
+    if not buzzer or not pattern:
+        return
+    try:
+        for freq, secs in pattern:
+            if freq:
+                buzzer.frequency = freq
+                buzzer.value = 0.5               # 50% duty = loudest square wave
+            else:
+                buzzer.value = 0                 # a rest
+            time.sleep(secs)
+        buzzer.value = 0
+    except Exception as e:                        # pragma: no cover - hardware path
+        print(f"[timecards] buzzer error: {e}", file=sys.stderr)
 
 
 # ── NFC (PN532 over I2C) — optional ─────────────────────────────────

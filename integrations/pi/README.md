@@ -11,11 +11,31 @@ truth, so the Pi can never disagree with the app about what's running.
  Button (tap)        → timecards press     (start / pause / resume / repeat)
  Button (hold 1.5s)  → timecards stop      (save the session)
  NFC tag tapped      → timecards slot --nfc <uid>
+ Timer button (tap)  → timecards timer switch <next timer>   (optional)
  LED                 ← timecards status --json
+ Buzzer              ← `finished` + `alarmStyle`             (optional)
 ```
 
 LED: **solid** = running, **slow blink** = paused, **fast blink** = finished (alarm),
 **brief heartbeat** = a card is in but idle, **off** = empty slot.
+
+**Everything except the button and LED is optional.** No NFC reader, no second
+button, no buzzer → the script says so at startup and runs with what's there. Build
+the minimal version first; add parts later without touching the code.
+
+## Parts
+
+| Part | ~Cost | Needed? |
+|------|-------|---------|
+| Raspberry Pi (any model with GPIO — a Zero 2 W is plenty) | $15–35 | yes |
+| Momentary push button (the big button) | ~$1 | yes |
+| LED + 220–330 Ω resistor | ~$1 | yes |
+| PN532 NFC module (I2C) + MIFARE tags | $10–15 | for card-swapping |
+| Passive buzzer | ~$2 | for an audible alarm |
+| Second momentary push button | ~$1 | to cycle timers |
+
+A **passive** buzzer (not active) is required — the driver generates the pitch via
+PWM, which an active buzzer ignores.
 
 ## 1. Install timecards on the Pi
 
@@ -57,7 +77,39 @@ I2C mode.
 | SDA   | GPIO2 / SDA (pin 3) |
 | SCL   | GPIO3 / SCL (pin 5) |
 
-Pins are configurable at the top of `timecards_pi.py` (`BUTTON_PIN`, `LED_PIN`).
+**Passive buzzer (optional)** — **GPIO18** → buzzer **+**; buzzer **−** → **GND**.
+GPIO18 is a hardware-PWM pin, which keeps the tone clean.
+
+```
+  GPIO18 ──┤ buzzer ├── GND
+```
+
+**Second button, "next timer" (optional)** — between **GPIO22** and **GND**, same as
+the big button (internal pull-up, no resistor).
+
+```
+  GPIO22 ──┤ button ├── GND
+```
+
+Pins are configurable at the top of `timecards_pi.py` (`BUTTON_PIN`, `LED_PIN`,
+`BUZZER_PIN`, `TIMER_BUTTON_PIN`). **Set `BUZZER_PIN` or `TIMER_BUTTON_PIN` to
+`None` if you haven't wired that part** — or just leave them; an unwired pin is
+harmless, the button simply never fires.
+
+### The alarm
+
+When a countdown hits zero, `status --json` reports `finished: true` and the card's
+`alarmStyle`. The driver beeps a pattern per style — `chime`, `blip`, `digital`,
+`bell`, `melody`, and `silent` (LED-only). It fires on the **rising edge** of
+`finished`, so it sounds once per finish, not every poll.
+
+### The timer button
+
+A card holds up to 4 timers. Tapping the second button switches to the next one,
+wrapping at the end. Switching **suspends** the current timer and resumes the target
+where it left off — that's core behavior, not something the driver implements. With
+0 or 1 timer on the card the tap is a no-op. When the slot is **locked** the core
+refuses the switch, which is why the driver doesn't check `locked` itself.
 
 ## 3. Python dependencies
 

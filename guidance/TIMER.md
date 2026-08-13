@@ -131,7 +131,9 @@ session controllable: `stop()`/`reset()`/`finish()`/`switchTimer()`/`slot()`/
 tap can't disturb your setup or swap the card (including via NFC). **`press()` is the
 exception — the big button stays LIVE while locked**, so you can still start / pause /
 resume / repeat the running session; the lock protects the surroundings, not the run
-itself. The lock toggle (`lock()`) always works — unlocking is the only way out.
+itself. `repeat()` is live for the same reason (it *is* what the button does in the
+finished state, and the CLI calls it directly): with stop/reset/finish all frozen, a
+locked ringing countdown would otherwise have no exit but the lock latch. The lock toggle (`lock()`) always works — unlocking is the only way out.
 (Earlier `press()` was also blocked, and earlier still slotting/ejecting cleared the
 lock; both let a stray action defeat the lock's purpose.)
 

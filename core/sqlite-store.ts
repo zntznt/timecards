@@ -74,7 +74,10 @@ export class SqliteStore implements Storage {
   }
 
   /** Additive migrations + a one-time data migration from the pre-timers schema:
-   *  cards that carried mode/alarm get a seeded timer so old data keeps working. */
+   *  cards that carried mode/alarm get a seeded timer so old data keeps working.
+   *  ONE method only — a class may not have two `migrate()`s: the later definition
+   *  silently wins, which is how the whole data migration below once went dead and
+   *  left pre-timers databases unopenable (`slot has no column active_timer_id`). */
   private migrate() {
     const tryExec = (sql: string) => { try { this.db.exec(sql); } catch { /* exists */ } };
     // Add any columns introduced over time (no-op if present).
@@ -82,6 +85,9 @@ export class SqliteStore implements Storage {
       `ALTER TABLE cards ADD COLUMN last_timer_id TEXT`,
       `ALTER TABLE cards ADD COLUMN deadline INTEGER`,
       `ALTER TABLE cards ADD COLUMN deadline_kind TEXT`,
+      `ALTER TABLE cards ADD COLUMN emblem TEXT`,
+      `ALTER TABLE cards ADD COLUMN foil TEXT`,
+      `ALTER TABLE cards ADD COLUMN texture TEXT`,
       `ALTER TABLE sessions ADD COLUMN timer_id TEXT`,
       `ALTER TABLE slot ADD COLUMN active_timer_id TEXT`,
       `ALTER TABLE slot ADD COLUMN locked INTEGER NOT NULL DEFAULT 0`,
@@ -153,13 +159,6 @@ export class SqliteStore implements Storage {
       id: r.id, cardId: r.card_id, timerId: r.timer_id, mode: r.mode, targetMs: r.target_ms,
       startedAt: r.started_at, endedAt: r.ended_at, pausedMs: r.paused_ms, pausedAt: r.paused_at,
     };
-  }
-
-  /** Additive migrations for DBs created before a column existed. */
-  private migrate() {
-    for (const col of ["emblem TEXT", "foil TEXT", "texture TEXT"]) {
-      try { this.db.exec(`ALTER TABLE cards ADD COLUMN ${col}`); } catch { /* already there */ }
-    }
   }
 
   // ── Cards ─────────────────────────────────────────────────────

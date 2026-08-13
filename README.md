@@ -10,8 +10,11 @@ its data swaps in.
 Each card can be an open **stopwatch** or a **countdown** (with a **chime / blip /
 silent alarm** when it hits zero, and one-press **repeat** to run the same round
 again), can carry a **deadline or streak** ("42 days left", "day 17"), and you can
-**lock** the device so a stray tap won't stop your session. A **stats** view shows
-totals, a daily chart, streaks, and recent sessions.
+**lock** the device so a stray tap won't stop your session (the big button stays live —
+the lock freezes the setup around your run, not the run). A **stats** view shows
+totals, a daily chart, streaks, and recent sessions. The web app's SETUP sheet
+**exports and imports** your whole dataset as one JSON file, so a browser that clears
+its storage can't take your history with it.
 
 There's a **web app**, a **command line**, and a data model built to be read by a
 **Raspberry Pi or Arduino** — even to recognize **NFC tags** like amiibos, so you
@@ -19,10 +22,11 @@ can tap a physical card to switch what you're tracking.
 
 ## Try it
 
-**Web** (no install): build it and open the page.
+**Web** (no install): build it and open the page. Serve the **repo root**, not `docs/`,
+so the app loads under a subpath exactly like GitHub Pages does:
 ```bash
 node web/build.ts
-cd docs && python3 -m http.server 8000   # then open http://localhost:8000
+python3 -m http.server 8000   # then open http://localhost:8000/docs/index.html
 ```
 
 **Command line:**

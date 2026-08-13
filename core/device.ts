@@ -107,10 +107,14 @@ export class Device {
     return updated;
   }
 
-  /** Delete a card, its timers, and its history. Ejects first if slotted. */
+  /** Delete a card, its timers, and its history. Clears the slot first if slotted.
+   *  Note this clears the slot DIRECTLY rather than calling eject(): eject() no-ops
+   *  while locked, and the rows are about to be deleted regardless — which would
+   *  leave the slot pointing at a card that no longer exists, and locked, so eject()
+   *  would go on refusing to clear it. There is nothing left to suspend here. */
   async deleteCard(id: string): Promise<void> {
     const slot = await this.store.getSlot();
-    if (slot.cardId === id) await this.eject();
+    if (slot.cardId === id) await this.store.setSlot({ cardId: null, activeTimerId: null, locked: false });
     for (const t of await this.store.listTimers(id)) await this.store.deleteTimer(t.id);
     await this.store.deleteCard(id);
   }
@@ -283,10 +287,14 @@ export class Device {
 
   /** Repeat: save the active timer's finished (or in-progress) session to history,
    *  then start a fresh session at the SAME mode/duration as the one that just ran.
-   *  This is the device's "repeat" — one action begins the next identical round. */
+   *  This is the device's "repeat" — one action begins the next identical round.
+   *  Like press(), repeat() IGNORES the lock: it is what the big button does in the
+   *  finished state, and the lock protects the surroundings, not the run. Blocking it
+   *  trapped a locked, ringing countdown — stop/reset/finish are all frozen, so the
+   *  only way out was the lock latch itself. */
   async repeat(): Promise<SlotView> {
     const slot = await this.store.getSlot();
-    if (slot.locked || !slot.activeTimerId) return this.view();
+    if (!slot.activeTimerId) return this.view();
     const timer = await this.store.getTimer(slot.activeTimerId);
     if (!timer || !timer.liveSession) return this.view(); // nothing to repeat
     const prev = timer.liveSession;

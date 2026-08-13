@@ -7,8 +7,9 @@
 //   timecards cards                       list all cards
 //   timecards slot <id|name>              put a card in the device
 //   timecards slot --nfc <uid>            slot by NFC tag UID (hardware bridge)
-//   timecards press [--down <mins>]       the big button (start/pause/resume)
-//   timecards stop                        stop & save current session
+//   timecards press [--down <mins>]       the big button (start/pause/resume/repeat)
+//   timecards stop                        freeze & keep the run (nothing saved yet)
+//   timecards finish                      bank the run to history
 //   timecards eject                       remove card from device
 //   timecards status                      what's slotted & running now
 //   timecards report [<id>]               total tracked time per card
@@ -21,6 +22,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { Device, slugify } from "../core/device.ts";
 import { SqliteStore } from "../core/sqlite-store.ts";
 import { fmtDuration } from "../core/format.ts";
+import { MAX_TIMERS } from "../core/types.ts";
 import * as Stats from "../core/stats.ts";
 import type { SlotView, Card, Timer, TimerMode, AlarmStyle, DeadlineKind } from "../core/types.ts";
 
@@ -157,6 +159,7 @@ const SB_URL = process.env.TIMECARDS_SUPABASE_URL;
 const SB_KEY = process.env.TIMECARDS_SUPABASE_KEY;
 let store: { close?: () => void };
 let dev: Device;
+let cliError: string | null = null;
 if (SB_URL && SB_KEY) {
   try {
     const { makeSupabaseStoreNode } = await import("../core/supabase-store.ts");
@@ -175,31 +178,39 @@ if (SB_URL && SB_KEY) {
 try {
   switch (cmd) {
     case "new": {
+      // Pull EVERY option before touching positionals: pullOpt/pullFlag splice by
+      // name and are order-independent, but argv.shift() is not — read a flag late
+      // and `new --category hobby "Reading"` names the card "--category".
+      const down = pullOpt("--down");
+      const category = pullOpt("--category");
+      const color = pullOpt("--color");
+      const alarm = pullOpt("--alarm") as AlarmStyle | undefined;
       const name = argv.shift();
       if (!name) die(`usage: timecards new "<name>" [--category X] [--color "#abc"] [--down <dur>] [--alarm chime|blip|digital|bell|melody|silent]`);
-      const down = pullOpt("--down");
       const card = await dev.createCard(name, {
-        category: pullOpt("--category"),
-        color: pullOpt("--color"),
+        category,
+        color,
         defaultMode: down ? "down" : undefined,
         defaultTargetMs: down ? parseDuration(down) : undefined,
-        alarmStyle: pullOpt("--alarm") as AlarmStyle | undefined,
+        alarmStyle: alarm,
       });
       out(`created card "${card.name}"  (id: ${card.id})`, card);
       break;
     }
     case "config": case "set": {
       // Card-level config: deadline / category / color. (Timer config lives under `timer`.)
-      const id = await resolveCardId(dev, need("config <id> [--deadline YYYY-MM-DD] [--since|--until] [--no-deadline] [--category X] [--color #abc]"));
       const deadlineStr = pullOpt("--deadline");
       const since = pullFlag("--since");
       const until = pullFlag("--until");
       const clearDeadline = pullFlag("--no-deadline");
+      const category = pullOpt("--category");
+      const color = pullOpt("--color");
+      const id = await resolveCardId(dev, need("config <id> [--deadline YYYY-MM-DD] [--since|--until] [--no-deadline] [--category X] [--color #abc]"));
       const card = await dev.configureCard(id, {
         deadline: clearDeadline ? null : deadlineStr ? parseDate(deadlineStr) : undefined,
         deadlineKind: since ? "since" : until ? "until" : undefined,
-        category: pullOpt("--category"),
-        color: pullOpt("--color"),
+        category,
+        color,
       });
       out(`configured "${card.name}"`, card);
       break;
@@ -225,14 +236,15 @@ try {
     case "timer": {
       const sub = argv.shift();
       if (sub === "add") {
+        const down = pullOpt("--down");
+        const alarm = pullOpt("--alarm") as AlarmStyle | undefined;
         const cardId = await resolveCardId(dev, need(`timer add <card> "<name>" [--down <dur>] [--alarm X]`));
         const name = argv.shift();
-        const down = pullOpt("--down");
         const t = await dev.addTimer(cardId, {
           name,
           mode: down ? "down" : "up",
           targetMs: down ? parseDuration(down) : null,
-          alarmStyle: pullOpt("--alarm") as AlarmStyle | undefined,
+          alarmStyle: alarm,
         });
         out(`added timer "${t.name}" to ${cardId}`, t);
       } else if (sub === "rm" || sub === "delete") {
@@ -247,14 +259,16 @@ try {
         const v = await dev.switchTimer(t.id);
         out(viewLine(v), v);
       } else if (sub === "edit") {
+        const down = pullOpt("--down"); const up = pullFlag("--up");
+        const newName = pullOpt("--name");
+        const alarm = pullOpt("--alarm") as AlarmStyle | undefined;
         const cardId = await resolveCardId(dev, need(`timer edit <card> <timer> [--name X] [--down <dur>|--up] [--alarm X]`));
         const t = await resolveTimer(dev, cardId, need(`timer edit <card> <timer> ...`));
-        const down = pullOpt("--down"); const up = pullFlag("--up");
         const edited = await dev.configureTimer(t.id, {
-          name: pullOpt("--name"),
+          name: newName,
           mode: up ? "up" : down ? "down" : undefined,
           targetMs: down ? parseDuration(down) : up ? null : undefined,
-          alarmStyle: pullOpt("--alarm") as AlarmStyle | undefined,
+          alarmStyle: alarm,
         });
         out(`edited timer "${edited.name}"`, edited);
       } else {
@@ -382,11 +396,18 @@ try {
       break;
     }
     case "export": {
+      const file = pullOpt("--out") ?? argv[0];
       const dump = await dev.exportAll();
       const text = JSON.stringify(dump, null, 2);
-      const file = pullOpt("--out") ?? argv[0];
-      if (file) { writeFileSync(file, text); console.error(`exported to ${file}`); }
-      else console.log(text);                 // to stdout for piping
+      if (file) {
+        writeFileSync(file, text);
+        // Writing to a file frees stdout, so --json reports the write itself —
+        // otherwise this is the one success path that emits nothing (breaking the
+        // "--json on every command" contract for machine consumers).
+        out(`exported to ${file}`, { file, cards: dump.cards.length, timers: dump.timers.length, sessions: dump.sessions.length });
+      } else {
+        console.log(text);                    // no file: the dump IS the stdout payload, for piping
+      }
       break;
     }
     case "import": {
@@ -409,13 +430,22 @@ try {
     default:
       die(`unknown command "${cmd}" — try: timecards help`);
   }
+} catch (e) {
+  // Anything the core throws (the MAX_TIMERS cap, a missing card, a storage error)
+  // must still leave through die() — an uncaught throw prints a V8 stack to stderr
+  // and NOTHING to stdout, which silently breaks every --json consumer.
+  cliError = e instanceof Error ? e.message : String(e);
 } finally {
   store.close?.();   // SQLite needs closing; Supabase store has nothing to close
 }
+if (cliError) die(cliError);   // after close(), so the db is released either way
 
 function need(usage: string): string {
   const v = argv.shift();
-  if (!v) die(`usage: timecards ${usage}`);
+  // A leftover "--flag" here means the option wasn't pulled before the positionals
+  // (or the user mistyped one). Either way it must not become a card/timer NAME —
+  // error through die(), which honors --json.
+  if (!v || v.startsWith("--")) die(`usage: timecards ${usage}`);
   return v;
 }
 
@@ -431,7 +461,7 @@ CARDS
   rm <id>                                        delete a card + its timers + history
   nfc <id> <uid>                                 register an NFC tag to a card
 
-TIMERS (a card holds up to 10)
+TIMERS (a card holds up to ${MAX_TIMERS})
   timers [<card>]                                list a card's timers (▶ = active)
   timer add <card> "<name>" [--down <dur>] [--alarm X]   add a timer
   timer rm <card> <timer>                        delete a timer
@@ -447,7 +477,7 @@ DEVICE
                                                  (a finished round is saved first)
   finish                                         bank the run to history, timer idle
   repeat                                         re-run the same countdown (saves the round)
-  lock | unlock                                  freeze / unfreeze the big button
+  lock | unlock                                  freeze the setup (the big button stays live)
   eject                                          remove the card (suspends its timer)
   status                                         what's slotted & running
   report [<id>]                                  total tracked time

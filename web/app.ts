@@ -58,6 +58,51 @@ function setReadout(txt: string) {
   elGhost.textContent = txt.replace(/[0-9]/g, "8");
 }
 
+/** A countdown that ends while the tab is in the background is otherwise silent AND
+ *  invisible — hidden tabs may have their audio suspended and their timers clamped.
+ *  Guarded hard: `Notification` is absent in some contexts (a bare reference throws),
+ *  and Android Chrome throws on the constructor because it demands a service worker.
+ *  Permission is only ever asked for from a real press, never at load. */
+function notifyFinished(v: SlotView) {
+  if (!document.hidden) return;
+  try {
+    if (window.Notification?.permission !== "granted") return;
+    new Notification(`${v.card!.name} ・ time's up`, {
+      body: `${v.timer!.name} finished`,
+      tag: v.timer!.id,     // the 5s re-begs coalesce into one banner, not a stack
+    });
+  } catch { /* unsupported here — the chime and the tab title still carry it */ }
+}
+
+/** Speak a state change once. Deliberately carries NO digits: the tick calls
+ *  renderDevice ten times a second, and a live region containing the readout would
+ *  interrupt the user ten times a second. Card, timer and the sub-line are enough. */
+let saidLast = "";
+function announce(s: string) {
+  if (s === saidLast) return;
+  saidLast = s;
+  $("lcd-say").textContent = s;
+}
+
+/** The tab is the second readout: a backgrounded timer is invisible otherwise.
+ *  Built from the view, not from the LCD's DOM (which isn't written yet at call
+ *  time), and only assigned on change so the 10 Hz tick doesn't churn the title. */
+function setTabTitle(v: SlotView) {
+  let t = "timecards";
+  if (v.card && v.timer) {
+    // digits only while there's an actual run — a `ready` timer reading "▴ 00:00"
+    // in the tab looks like a stopwatch counting when nothing has started
+    const live = v.state === "running" || v.state === "paused" || v.state === "finished";
+    const digits = !live ? null
+                 : v.mode === "down" && v.remainingMs !== null ? fmtDuration(v.remainingMs)
+                 : v.mode === "up" ? fmtDuration(v.elapsedMs)
+                 : null;
+    const mark = v.state === "finished" ? "⏰" : v.state === "paused" ? "❚❚" : v.mode === "down" ? "▾" : "▴";
+    t = digits ? `${mark} ${digits} · ${v.card.name}` : `${v.card.name} · timecards`;
+  }
+  if (document.title !== t) document.title = t;
+}
+
 /** The LCD lamp row: each lamp lights (●/○ + color) from the real state. */
 function setLamps(state: string, locked: boolean, alarmStyle?: string) {
   const on = (id: string, lit: boolean, litTxt: string, dimTxt: string) => {
@@ -74,9 +119,19 @@ function setLamps(state: string, locked: boolean, alarmStyle?: string) {
 
 // ── alarm (WebAudio) ────────────────────────────────────────────
 let audioCtx: AudioContext | null = null;
-function beep(freq: number, durMs: number, when = 0) {
+/** The one place the context is created — and, every time, nudged out of
+ *  `suspended`. This matters because the FIRST sound the app makes may be an alarm
+ *  fired by the tick with no user gesture on the stack (reopen the page onto an
+ *  already-running countdown and let it hit zero). A context born that way starts
+ *  suspended, and since it is cached in a module-level `let`, every later click,
+ *  latch, print and flip stayed silent for the rest of the session. */
+function ac(): AudioContext {
   if (!audioCtx) audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-  const ctx = audioCtx;
+  if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+  return audioCtx;
+}
+function beep(freq: number, durMs: number, when = 0) {
+  const ctx = ac();
   const t0 = ctx.currentTime + when;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -104,8 +159,7 @@ function playAlarm(style: AlarmStyle) {
 }
 // a struck bell: inharmonic partials with a long metallic decay
 function bellAlarm() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-  const c = audioCtx, t = c.currentTime;
+  const c = ac(), t = c.currentTime;
   const partials: Array<[number, number]> = [[1568, 0.22], [2489, 0.12], [3951, 0.06]];
   for (const [f, g0] of partials) {
     const o = c.createOscillator(), g = c.createGain();
@@ -117,16 +171,14 @@ function bellAlarm() {
 }
 // ── printer sounds (from the mock): key click, dot-matrix chatter, tear ──
 function tone(freq: number, dur: number, type: OscillatorType = "square", gain = 0.18, slideTo?: number) {
-  if (!audioCtx) audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-  const c = audioCtx, t = c.currentTime, o = c.createOscillator(), g = c.createGain();
+  const c = ac(), t = c.currentTime, o = c.createOscillator(), g = c.createGain();
   o.type = type; o.frequency.setValueAtTime(freq, t);
   if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
   g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   o.connect(g).connect(c.destination); o.start(t); o.stop(t + dur + 0.02);
 }
 function noiseClick(dur = 0.03, gain = 0.25) {
-  if (!audioCtx) audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-  const c = audioCtx, n = c.createBufferSource(), buf = c.createBuffer(1, c.sampleRate * dur, c.sampleRate);
+  const c = ac(), n = c.createBufferSource(), buf = c.createBuffer(1, c.sampleRate * dur, c.sampleRate);
   const d = buf.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
   n.buffer = buf;
@@ -161,8 +213,7 @@ function sndPrint() { // dot-matrix printer chatter
 function sndCut() { noiseClick(0.06, 0.28); tone(2600, 0.05, "sawtooth", 0.12, 600); noiseClick(0.05, 0.2); }
 // card FLIP — a short PAPER turn: low thock + swept-noise whoosh + settle snap (from the mock)
 function sndFlip() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-  const c = audioCtx, t = c.currentTime;
+  const c = ac(), t = c.currentTime;
   const j = 1 + (Math.random() * 0.16 - 0.08);   // ±8% jitter so flips don't sound canned
   tone(95 * j, 0.05, "sine", 0.09);
   const n = c.createBufferSource(), dur = 0.12 * j;
@@ -181,8 +232,7 @@ function sndFlip() {
 // SHEET — an index card sliding across the desk: a soft band-swept paper hiss,
 // with a settle tap when it arrives (dir 1 = pulled up, -1 = tossed away).
 function sndSheet(dir: 1 | -1 = 1) {
-  if (!audioCtx) audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-  const c = audioCtx, t = c.currentTime, dur = 0.3;
+  const c = ac(), t = c.currentTime, dur = 0.3;
   const n = c.createBufferSource();
   const buf = c.createBuffer(1, c.sampleRate * dur, c.sampleRate);
   const d = buf.getChannelData(0);
@@ -201,6 +251,9 @@ let alarmedFor: string | null = null; // timerId:sessionId we've already alarmed
 let lastChimeAt = 0;                  // last time the ringing chime re-played
 const CHIME_EVERY_MS = 5_000;         // chime begs until acknowledged; blip stays a one-shot nudge
 let liveUpSession: Session | null = null;  // the running count-up session, for the rAF hundredths
+let rafId = 0;                        // the hundredths loop, only alive while one runs
+let lastState = "empty";              // last rendered RunState — lets the tick sleep when idle
+let deckIsEmpty = true;               // no cards at all: the empty LCD names the way in
 
 // ── the pull-tab at the device's bottom center: pull DOWN to take the card out ──
 const elPullTab = $<HTMLButtonElement>("pull-tab");
@@ -240,8 +293,14 @@ elPullTab.addEventListener("click", async (e) => {
 });
 
 // ── render ──────────────────────────────────────────────────────
-async function renderDevice() {
-  const v: SlotView = await dev.view();
+async function renderDevice(pre?: SlotView): Promise<SlotView> {
+  // `pre` lets a caller that just performed an action hand us the view it already
+  // has, instead of a second round-trip to storage for the same answer.
+  const v: SlotView = pre ?? await dev.view();
+  lastState = v.state;      // set HERE, not at the end — there are early returns below
+  liveUpSession = null;     // disarm the hundredths loop; the running branch re-arms it.
+                            // Without this, ejecting mid-stopwatch left the LCD reading
+                            // "— NO CARD —" while the digits kept counting up forever.
   elDevice.className = v.state + (v.locked ? " is-locked" : "");
   elLock.dataset.locked = String(v.locked);
   elLock.setAttribute("aria-pressed", String(v.locked));
@@ -257,6 +316,7 @@ async function renderDevice() {
   } else elDayCount.hidden = true;
 
   setLamps(v.state, v.locked, v.alarmStyle);
+  setTabTitle(v);
   // the machine acknowledges its card: backlight + collar key to its color,
   // its emblem lights as a custom LCD segment, TODAY counts its day
   if (v.card) {
@@ -280,13 +340,18 @@ async function renderDevice() {
     elCardName.textContent = "— NO CARD —"; elCardName.classList.add("empty");
     elTimerName.textContent = "—";
     setReadout("--:--");
-    elSub.textContent = "slot a card ・ or start a quick timer";
+    // a first-time visitor has an empty binder and no idea the sleeves are clickable
+    elSub.textContent = deckIsEmpty
+      ? "no cards yet ・ + in the binder, or start a quick timer"
+      : "slot a card ・ or start a quick timer";
     elBigLabel.textContent = "●"; elBigWord.textContent = "—";
+    elBig.setAttribute("aria-label", "no card in the device");
     elBig.disabled = true; elFinish.disabled = elReset.disabled = true;
+    announce(elSub.textContent ?? "");
     // the machine can't shrink: the rack stays, now a QUICK-TIMER LAUNCHER
     elTimers.hidden = false;
     renderLauncher();
-    return;
+    return v;
   }
   elCardName.classList.remove("empty");
   elCardName.textContent = v.card!.name;
@@ -299,8 +364,10 @@ async function renderDevice() {
     setReadout("--:--");
     elSub.textContent = "add a timer to begin";
     elBigLabel.textContent = "●"; elBigWord.textContent = "—";
+    elBig.setAttribute("aria-label", "this card has no timers yet");
     elBig.disabled = true; elFinish.disabled = elReset.disabled = true;
-    return;
+    announce(`${v.card!.name} ・ add a timer to begin`);
+    return v;
   }
   // The LCD's mode line reads the direction of time, like the mock ("COUNTDOWN ▼");
   // the active timer's NAME lives on the lit rack row below.
@@ -314,12 +381,16 @@ async function renderDevice() {
 
   // a RUNNING count-up shows hundredths — drive those from rAF (the 10x/sec device
   // tick is too coarse: it made the centiseconds jump in steps of ~10). Cache the
-  // live session so the frame loop can recompute elapsed with the engine's formula.
+  // live session so the frame loop can recompute elapsed with the engine's formula,
+  // and start the loop only when there is something to animate.
   liveUpSession = (v.state === "running" && v.mode === "up") ? (v.timer.liveSession ?? null) : null;
+  if (liveUpSession && !rafId) rafId = requestAnimationFrame(readoutFrame);
 
   elBigLabel.textContent = v.state === "finished" ? "↻" : (GLYPH[bigButtonAction(v.state)] ?? "●");
   // The label tells the truth about THIS press (mock review C1/U10: no static START/STOP lie).
   elBigWord.textContent = v.state === "finished" ? "REPEAT" : (WORD[bigButtonAction(v.state)] ?? "—");
+  // the button's NAME is the word under it — never a static "start, pause, or resume"
+  elBig.setAttribute("aria-label", `${elBigWord.textContent.toLowerCase()} ${v.timer.name}`);
 
   // the dome pauses/resumes; the two end keys are SAVE (bank to history) and
   // DISCARD (throw the run away). Both need a live run to act on.
@@ -331,16 +402,36 @@ async function renderDevice() {
   else if (v.state === "running") { elSub.textContent = v.mode === "down" ? "▾ counting down" : "▴ counting up"; }
   else if (v.state === "paused") { elSub.textContent = "❚❚ paused · press to resume · save or discard"; }
   else if (v.state === "finished") {
-    elSub.textContent = "time's up, round saved · press ↻ to repeat · discard to clear";
+    // NOT "round saved": a finished round is still only timer.liveSession and is
+    // absent from the card's total until an exit path banks it (↻, SAVE or DISCARD).
+    elSub.textContent = "time's up ・ ↻ repeats · SAVE banks it";
     const key = v.timer.id + ":" + (v.timer.liveSession?.id ?? "");
-    if (alarmedFor !== key) { alarmedFor = key; lastChimeAt = Date.now(); playAlarm(v.alarmStyle); }
+    if (alarmedFor !== key) {
+      alarmedFor = key; lastChimeAt = Date.now(); playAlarm(v.alarmStyle);
+      notifyFinished(v);
+    }
     else if (v.alarmStyle !== "blip" && v.alarmStyle !== "silent" && Date.now() - lastChimeAt >= CHIME_EVERY_MS) {
       lastChimeAt = Date.now(); playAlarm(v.alarmStyle); // the tick loop re-renders while finished, so this re-begs
     }
   }
+  announce(`${v.card!.name} ・ ${v.timer.name} ・ ${elSub.textContent ?? ""}`);
+  return v;
 }
 
+// The rack's contents change on user action, not on the clock — but renderDevice
+// runs 10×/sec while a timer runs. Rebuilding then is not just wasted DOM: it swaps
+// out the <li> and its ✎/✕ BETWEEN a pointerdown and its pointerup, so the click
+// never lands, and switching timers mid-run failed at random. Rebuild only when the
+// rack's actual contents differ.
+let rackSig = "";
 function renderTimerList(v: SlotView) {
+  const sig = v.timers.map(t => [t.id, t.name, t.mode, t.targetMs,
+                                t.liveSession?.id ?? "", t.liveSession?.pausedAt ?? ""].join("~")).join("|")
+    // the active row's LED, plus everything the add/socket rows read off the card
+    + "#" + (v.timer?.id ?? "") + "#" + (v.card?.id ?? "") + "#" + (v.card?.emblem ?? "") + "#" + (v.card?.name ?? "");
+  if (sig === rackSig) return;
+  rackSig = sig;
+
   elTimerList.innerHTML = "";
   $("rack-count").textContent = `${String(v.timers.length).padStart(2, "0")} / ${MAX_TIMERS}`;
   for (const t of v.timers) elTimerList.appendChild(timerRow(t, v.timer?.id ?? null));
@@ -352,7 +443,8 @@ function renderTimerList(v: SlotView) {
     add.className = "timer-row add";
     add.textContent = "+ ADD TIMER";
     add.title = "add a timer";
-    add.onclick = () => { if (isLocked()) return scoldLock(); if (v.card) openTimerEditor(v.card.id, null); };
+    operable(add, "add a timer to this card",
+      () => { if (isLocked()) return scoldLock(); if (v.card) openTimerEditor(v.card.id, null); });
     elTimerList.appendChild(add);
     filled++;
   }
@@ -391,13 +483,17 @@ async function quickStart(mode: TimerMode) {
   }
 }
 function renderLauncher() {
+  rackSig = "";              // the other writer of this <ul> — leaving a stale signature
+                             // here would make a re-slotted card keep showing the bays
   elTimerList.innerHTML = "";
   $("rack-count").textContent = "⚡ QUICK";
   const bay = (cls: string, glyph: string, label: string, jp: string, onClick: () => void) => {
     const li = el("li", `timer-row launch ${cls}`) as HTMLLIElement;
     li.append(el("span", "lc-glyph", glyph), el("span", "lc-label", label), el("span", "lc-jp", jp));
-    li.onclick = onClick;
-    return li;
+    // the lock guard has to live HERE too: keyboard activation never reaches the
+    // pointerdown scold handler on #device
+    return operable(li, `start a quick ${label.toLowerCase()}`,
+      () => { if (isLocked()) return scoldLock(); onClick(); });
   };
   elTimerList.append(
     bay("up", "▶", "STOPWATCH", "ストップウォッチ", () => quickStart("up")),
@@ -413,7 +509,19 @@ function timerRow(t: Timer, activeId: string | null): HTMLLIElement {
   const top = document.createElement("div"); top.className = "tc-top";
   const bot = document.createElement("div"); bot.className = "tc-bot";
   const led = document.createElement("span"); led.className = "t-led"; // lit by CSS on .active
-  const nm = document.createElement("span"); nm.className = "t-nm"; nm.textContent = t.name;
+  // The name is a real <button>: the row itself can't be one (it contains the ✎/✕
+  // buttons), so without this the card's central interaction — switching timers —
+  // has no keyboard path at all. CSS resets it back to looking like the label it was.
+  const nm = document.createElement("button"); nm.type = "button";
+  nm.className = "t-nm"; nm.textContent = t.name;
+  nm.setAttribute("aria-label", `switch to ${t.name}`);
+  if (t.id === activeId) nm.setAttribute("aria-current", "true");
+  nm.onclick = async (e) => {
+    e.stopPropagation();
+    if (isLocked()) return scoldLock();
+    sndTick();
+    await renderDevice(await dev.switchTimer(t.id));
+  };
   const cfg = document.createElement("span"); cfg.className = "t-cfg";
   cfg.textContent = t.mode === "down" && t.targetMs ? fmtDuration(t.targetMs) : "stopwatch";
   const live = document.createElement("span");
@@ -422,17 +530,23 @@ function timerRow(t: Timer, activeId: string | null): HTMLLIElement {
     live.className = "t-live " + (held ? "held" : "run");
     live.textContent = held ? "⏸" : "▶";
   }
+  // title alone names an element only when it has no text — these read out as
+  // "pencil" and "multiplication x" otherwise, four times over, with no idea which
+  // timer is about to be deleted.
   const edit = document.createElement("button");
   edit.className = "t-del"; edit.textContent = "✎"; edit.title = "edit timer";
+  edit.setAttribute("aria-label", `edit timer ${t.name}`);
   edit.onclick = (e) => { e.stopPropagation(); if (isLocked()) return scoldLock(); openTimerEditor(t.cardId, t); };
   const del = document.createElement("button");
   del.className = "t-del"; del.textContent = "✕"; del.title = "delete timer";
+  del.setAttribute("aria-label", `delete timer ${t.name}`);
   del.onclick = async (e) => {
     e.stopPropagation();
     if (isLocked()) return scoldLock();   // the lock holds the timer set, too
-    if (confirm(`Delete timer "${t.name}"? Its time is saved to history.`)) { await dev.deleteTimer(t.id); await renderAll(); }
+    if (confirm(`Delete timer "${t.name}"? Its time is saved to history.`)) await deleteTimerWithUndo(t);
   };
-  li.onclick = async () => { if (isLocked()) return scoldLock(); sndTick(); await dev.switchTimer(t.id); await renderAll(); };
+  // switching suspends one timer and resumes another — a device-side change only
+  li.onclick = async () => { if (isLocked()) return scoldLock(); sndTick(); await renderDevice(await dev.switchTimer(t.id)); };
   top.append(led, nm, live);
   bot.append(cfg, edit, del);
   li.append(top, bot);
@@ -481,6 +595,23 @@ const el = (tag: string, cls: string, text?: string) => {
   return e;
 };
 
+/** Make a non-button element a real control: focusable, named, and activated by
+ *  Enter/Space as well as a click. Used for the moulded parts of the machine — the
+ *  rack's sockets and the binder's sleeves — which are <li>s for layout reasons but
+ *  are the only route to "add a timer" / "new card". */
+function operable<T extends HTMLElement>(node: T, label: string, fn: () => void): T {
+  node.tabIndex = 0;
+  node.setAttribute("role", "button");
+  node.setAttribute("aria-label", label);
+  node.onclick = fn;
+  node.onkeydown = (e: KeyboardEvent) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();      // Space must press this, not scroll the page
+    fn();
+  };
+  return node;
+}
+
 const elBinderPage = document.querySelector(".binder__page") as HTMLElement;
 
 // fill the bench remainder with EMPTY welded sleeves so the page reads as a real
@@ -488,24 +619,43 @@ const elBinderPage = document.querySelector(".binder__page") as HTMLElement;
 // (deviation from the mock, which puts it last: on a phone the bench shows ~1.5
 // pockets, so a trailing + would hide behind a scroll of empties).
 function fillEmptySleeves() {
-  elList.querySelectorAll(".pocket--empty").forEach(p => p.remove());
   const POCKET_W = 262;
-  const realCount = elList.querySelectorAll(".pocket").length;
+  // count the REAL pockets explicitly — ".pocket" also matches the empties, and
+  // relying on them having just been removed is how this miscounts if reordered
+  const realCount = elList.querySelectorAll(".pocket:not(.pocket--empty)").length;
   const fit = Math.ceil(elBinderPage.clientWidth / POCKET_W) + 1;
   const need = Math.max(1, fit - realCount);
+  const existing = elList.querySelectorAll(".pocket--empty");
+  if (existing.length === need) return;          // a resize that changed nothing
+  existing.forEach(p => p.remove());
   for (let i = 0; i < need; i++) {
     const empty = el("li", "pocket pocket--empty" + (i === 0 ? " pocket--add" : ""));
     empty.append(el("span", "pocket__ring"), el("span", "pocket__weld-b"), el("span", "pocket__lip"));
-    if (i === 0) { empty.title = "new card"; empty.onclick = () => { sndClick(); openCardEditor(null); }; }
+    if (i === 0) {
+      empty.title = "new card";
+      // the only route to a named card in the whole app — say so, and make it work
+      // from a keyboard (it was a bare onclick on an <li>)
+      empty.append(el("span", "pocket__new", "NEW CARD ・ 新規"));
+      operable(empty, "new card", () => { sndClick(); openCardEditor(null); });
+      // once the bench is full the add sleeve lands past the fold, where a phone
+      // never scrolls to — put it FIRST instead of losing it
+      if (realCount >= fit - 1) { elList.prepend(empty); continue; }
+    }
     elList.appendChild(empty);
   }
 }
-window.addEventListener("resize", fillEmptySleeves);
+// resize fires in bursts (a drag, a phone rotation); do the work once per frame
+let sleeveRaf = 0;
+window.addEventListener("resize", () => {
+  if (sleeveRaf) return;
+  sleeveRaf = requestAnimationFrame(() => { sleeveRaf = 0; fillEmptySleeves(); });
+});
 
-async function renderDeck() {
-  const cards = await dev.listCards();
-  const active = (await dev.view()).card?.id ?? null;
-  const { sessions, now } = await dev.statsData();
+/** Per-card banked totals, recomputed from one sessions list. renderDevice reads
+ *  these for the LCD's TODAY line and rarity, so it must run BEFORE renderDevice —
+ *  when renderDeck filled them afterwards, the first paint showed TODAY 00:00 on a
+ *  card with hours on it, and TODAY visibly dropped for a moment after SAVE. */
+function refreshBanked(sessions: Session[], now: number) {
   const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
   todayBanked.clear(); allBanked.clear();
   for (const sn of sessions) {
@@ -515,17 +665,31 @@ async function renderDeck() {
       todayBanked.set(sn.cardId, (todayBanked.get(sn.cardId) ?? 0) + ms);
     }
   }
+}
+
+/** Draw the binder from a snapshot the caller already fetched. Takes the view and
+ *  the stats data rather than re-reading storage: this used to issue listCards() +
+ *  view() + statsData() and then ANOTHER listTimers() per card. */
+function renderDeck(v: SlotView, data: { sessions: Session[]; cards: Card[]; timers: Timer[]; now: number }) {
+  const active = v.card?.id ?? null;
+  // bucket the timers once instead of a storage round-trip per card
+  const byCard = new Map<string, Timer[]>();
+  for (const t of data.timers) {
+    const list = byCard.get(t.cardId);
+    if (list) list.push(t); else byCard.set(t.cardId, [t]);
+  }
+  for (const list of byCard.values()) list.sort((a, b) => a.order - b.order);
   // a card portaled to <body> mid-gesture belongs to the OLD render — clear it
   document.querySelectorAll("body > .card").forEach(c => c.remove());
   elList.innerHTML = "";
-  for (let i = 0; i < cards.length; i++) {
-    elList.appendChild(await cardItem(cards[i], active, i, sessions, now));
+  for (let i = 0; i < data.cards.length; i++) {
+    const c = data.cards[i];
+    elList.appendChild(cardItem(c, active, i, data.sessions, data.now, byCard.get(c.id) ?? []));
   }
   fillEmptySleeves();
 }
 
-async function cardItem(c: Card, active: string | null, index: number, sessions: Session[], now: number): Promise<HTMLLIElement> {
-  const timers = await dev.listTimers(c.id);
+function cardItem(c: Card, active: string | null, index: number, sessions: Session[], now: number, timers: Timer[]): HTMLLIElement {
   const mine = sessions.filter(s => s.cardId === c.id);
   const total = mine.reduce((sum, s) => sum + elapsed(s, now), 0);
   const longest = mine.reduce((max, s) => Math.max(max, elapsed(s, now)), 0);
@@ -624,18 +788,34 @@ async function cardItem(c: Card, active: string | null, index: number, sessions:
   back.append(cbId, nameRow, ledger, cbFoot);
 
   card3d.append(front, back);
+  // backface-visibility only hides the reverse VISUALLY — a screen reader was
+  // reading both faces of every pocket, doubling the binder's verbosity.
+  setFaceVisibility(card3d, flippedCards.has(c.id));
 
   const actions = el("div", "card-actions");
+  // The flip is otherwise a pointer-only secret: nothing says "tap me", and a
+  // keyboard never gets there at all. This cluster is a SIBLING of .card, outside the
+  // document-level drag gesture, so a key here can't also arm a drag.
+  const flip = el("button", "card-flip", "⟲") as HTMLButtonElement;
+  flip.title = "flip ・ 裏面";
+  flip.setAttribute("aria-label", `flip ${c.name} over to its record`);
+  flip.onclick = (e) => {
+    e.stopPropagation();
+    const cardEl = (e.currentTarget as HTMLElement).closest(".pocket")?.querySelector(".card") as HTMLElement | null;
+    if (cardEl) flipCard(cardEl);
+  };
   const edit = el("button", "card-edit", "✎") as HTMLButtonElement;
   edit.title = "edit card";
+  edit.setAttribute("aria-label", `edit card ${c.name}`);
   edit.onclick = (e) => { e.stopPropagation(); openCardEditor(c); };
   const del = el("button", "card-del", "✕") as HTMLButtonElement;
   del.title = "delete card";
+  del.setAttribute("aria-label", `delete card ${c.name}`);
   del.onclick = async (e) => {
     e.stopPropagation();
-    if (confirm(`Delete "${c.name}", its timers, and history?`)) { await dev.deleteCard(c.id); await renderAll(); }
+    if (confirm(`Delete "${c.name}", its timers, and history?`)) await deleteCardWithUndo(c);
   };
-  actions.append(edit, del);
+  actions.append(flip, edit, del);
 
   // taps and drags on the card are handled by the unified pointer gesture (below)
   card.appendChild(card3d);
@@ -643,11 +823,83 @@ async function cardItem(c: Card, active: string | null, index: number, sessions:
   return li;
 }
 
-async function renderAll() { await renderDevice(); await renderDeck(); }
+/** Full repaint: ONE storage fetch feeds both halves, and the banked totals are
+ *  filled before the LCD reads them. */
+// ── UNDO ────────────────────────────────────────────────────────
+// Deleting a card cascades its timers AND its whole history, with no recovery and
+// (until the settings sheet's export) no backup. Rather than invent a trash can, we
+// snapshot the affected rows FIRST and offer them back for a few seconds:
+// Device.importAll upserts by id, so a restore returns byte-identical data.
+const UNDO_MS = 10_000;
+let undoTimer = 0;
+const elUndo = el("div", "undo-strip");
+elUndo.id = "undo-strip";
+elUndo.hidden = true;
+elUndo.setAttribute("role", "status");
+document.body.appendChild(elUndo);
+
+function offerUndo(message: string, restore: () => Promise<void>) {
+  clearTimeout(undoTimer);
+  elUndo.innerHTML = "";
+  const btn = el("button", "undo-key", "UNDO ・ 取消") as HTMLButtonElement;
+  btn.type = "button";
+  btn.onclick = async () => {
+    clearTimeout(undoTimer);
+    elUndo.hidden = true;
+    sndSheet(1);
+    await restore();
+    await renderAll();
+  };
+  elUndo.append(el("span", "undo-msg", message), btn);
+  elUndo.hidden = false;
+  undoTimer = window.setTimeout(() => { elUndo.hidden = true; }, UNDO_MS);
+}
+
+async function deleteCardWithUndo(c: Card) {
+  // snapshot BEFORE the delete — afterwards the rows are gone
+  const timers = await dev.listTimers(c.id);
+  const sessions = await dev.listSessions(c.id);
+  const slot = (await dev.view()).card?.id === c.id;
+  await dev.deleteCard(c.id);
+  await renderAll();
+  offerUndo(`deleted "${c.name}"`, async () => {
+    await dev.importAll({ version: 1, exportedAt: Date.now(), cards: [c], timers, sessions,
+                          slot: { cardId: slot ? c.id : null, activeTimerId: slot ? (c.lastTimerId ?? null) : null, locked: false } });
+  });
+}
+
+async function deleteTimerWithUndo(t: Timer) {
+  const card = await dev.getCard(t.cardId);
+  await dev.deleteTimer(t.id);   // banks any in-progress run to history first
+  await renderAll();
+  offerUndo(`deleted timer "${t.name}"`, async () => {
+    // Restore the CONFIG with no live session: deleteTimer already banked the run to
+    // history, so bringing liveSession back would leave the same stretch of time
+    // counted twice — once on the timer, once in the ledger.
+    const restored: Timer = { ...t, liveSession: null };
+    // leave the slot exactly as it is; only the timer row is coming back
+    const now = await dev.view();
+    await dev.importAll({ version: 1, exportedAt: Date.now(), cards: card ? [card] : [],
+                          timers: [restored], sessions: [],
+                          slot: { cardId: now.card?.id ?? null, activeTimerId: now.timer?.id ?? null, locked: now.locked } });
+  });
+}
+
+async function renderAll() {
+  const data = await dev.statsData();
+  deckIsEmpty = data.cards.length === 0;
+  refreshBanked(data.sessions, data.now);
+  const v = await renderDevice();
+  renderDeck(v, data);
+}
 
 /** Slot a card into the device: thunk + the LCD wakes with a flicker (the mock's insert).
  *  No card may be left showing its reverse or lifted out of its pocket. */
 async function slotCard(cardId: string) {
+  // The engine refuses to swap the card while locked (device.ts slot()), but the UI
+  // used to thunk, flip every card face-down and flicker the LCD anyway — the machine
+  // performing an action it did not perform. Answer the poke honestly instead.
+  if (isLocked()) return scoldLock();
   document.querySelectorAll<HTMLElement>(".card.flipped, .card.airborne, .card.resting").forEach(resetCard);
   flippedCards.clear();
   sndThunk();
@@ -722,6 +974,12 @@ function resetCard(card: HTMLElement) {
   }
 }
 
+/** Expose exactly the face that is showing to assistive tech. */
+function setFaceVisibility(card3d: Element, showingBack: boolean) {
+  card3d.querySelector(".card-face.front")?.setAttribute("aria-hidden", String(showingBack));
+  card3d.querySelector(".card-back")?.setAttribute("aria-hidden", String(!showingBack));
+}
+
 function flipCard(card: HTMLElement) {
   if (card.dataset.busy) return;
   const toBack = !card.classList.contains("flipped");
@@ -740,6 +998,8 @@ function flipCard(card: HTMLElement) {
   onTopEnd(card, () => {
     sndFlip();                                                          // beat 2: flip mid-air
     card.classList.toggle("flipped", toBack);
+    const c3d = card.querySelector(".card-3d");
+    if (c3d) setFaceVisibility(c3d, toBack);
     if (toBack) flippedCards.add(id); else flippedCards.delete(id);
     onFlipEnd(card, () => {
       settle(() => { if (toBack) restInPocket(card); else unpin(card); });   // beat 3: settle
@@ -765,6 +1025,7 @@ document.addEventListener("pointermove", (e) => {
     if (Math.hypot(dx, dy) <= DRAG_THRESH) return;
     drag.moved = true;
     if (Math.abs(dx) > Math.abs(dy)) { drag = null; return; }   // horizontal → bench scroll
+    if (dy > 0) { drag = null; return; }                        // downward → let the page scroll
     startCardDrag(e);
   }
   if (drag?.active) { e.preventDefault(); moveCardTo(e.clientX, e.clientY); }
@@ -816,6 +1077,16 @@ function endCardDrag(card: HTMLElement) {
   home?.appendChild(card);
   (card as any)._dragHome = null;
 }
+// The bench scrolls horizontally and hides both scrollbars, so a plain desktop mouse
+// (vertical wheel, no shift) could not move it at all. Map the wheel onto it — but
+// only when the wheel is genuinely vertical, so trackpad side-swipes still work.
+elBinderPage.addEventListener("wheel", (e) => {
+  if (e.deltaX !== 0 || Math.abs(e.deltaY) < 2) return;
+  if (elBinderPage.scrollWidth <= elBinderPage.clientWidth) return;   // nothing to scroll
+  e.preventDefault();
+  elBinderPage.scrollLeft += e.deltaY;
+}, { passive: false });
+
 // a card mid-FLIGHT is position:fixed; keep it aligned to its pocket if the bench scrolls
 elBinderPage.addEventListener("scroll", () => {
   document.querySelectorAll<HTMLElement>(".card.airborne").forEach(card => {
@@ -825,7 +1096,17 @@ elBinderPage.addEventListener("scroll", () => {
 }, { passive: true });
 
 // ── device interactions (each key clicks like the mock's) ───────
-elBig.onclick = async () => { sndDome(); await dev.press(); await renderAll(); };
+// A press only moves the LCD and one rack LED — nothing it writes is read by the
+// binder — so it repaints the device, not the whole deck. The exception is leaving
+// `finished`: that banks the round, which DOES change the card's totals.
+elBig.onclick = async () => {
+  sndDome();
+  // ask for notification permission from a real press — never at load, and only once
+  if (window.Notification?.permission === "default") Notification.requestPermission().catch(() => {});
+  const wasFinished = lastState === "finished";
+  const v = await dev.press();
+  if (wasFinished) await renderAll(); else await renderDevice(v);
+};
 elFinish.onclick = async () => { sndBank(); alarmedFor = null; await dev.finish(); await renderAll(); }; // bank to history
 elReset.onclick = async () => { sndClick(); alarmedFor = null; await dev.reset(); await renderAll(); }; // discard
 elLock.onclick = async () => { sndLatch(); await dev.lock(); await renderDevice(); };
@@ -857,12 +1138,23 @@ elDevice.addEventListener("pointerdown", (e) => {
 }, true);
 
 document.addEventListener("keydown", (e) => {
-  if (e.code === "Space" && !(e.target instanceof HTMLInputElement) &&
-      !(e.target instanceof HTMLSelectElement) && !elCardEditor.open &&
-      !elRackArea.classList.contains("editing")) {
+  // Escape backs out of the programming panel, the way it does out of the card editor.
+  if (e.key === "Escape" && elRackArea.classList.contains("editing")) {
     e.preventDefault();
-    elBig.click();   // Space IS the big dome — live even while locked
+    sndClick();
+    closeTimerEditor();
+    return;
   }
+  if (e.code !== "Space") return;
+  if (elCardEditor.open || elRackArea.classList.contains("editing")) return;
+  // Space IS the big dome — live even while locked. But it must not steal the key
+  // from a focused control (Space is how you activate a button), and while a paper
+  // is out Space belongs to the tape: scrolling it, or pressing its printed keys.
+  const t = e.target as HTMLElement | null;
+  if (t && t !== elBig && t.closest("button, input, select, textarea, [contenteditable]")) return;
+  if (paperOut) return;
+  e.preventDefault();
+  elBig.click();
 });
 
 // ── the index-card editors: pulled up from the desk, tossed away on close ──
@@ -906,8 +1198,16 @@ function openCardEditor(card: Card | null) {
 $("card-cancel").onclick = () => closeEditor(elCardEditor);
 $<HTMLFormElement>("card-form").onsubmit = async (e) => {
   e.preventDefault();
-  const name = $<HTMLInputElement>("c-name").value.trim();
-  if (!name) return;
+  const nameEl = $<HTMLInputElement>("c-name");
+  const name = nameEl.value.trim();
+  if (!name) {
+    // A whitespace-only name passes `required` but fails our trim, and the form used
+    // to just return — the save key did nothing, with nothing said. Empty the field
+    // so the browser's own "please fill this in" bubble fires on the right input.
+    nameEl.value = "";
+    nameEl.reportValidity();
+    return;
+  }
   const category = $<HTMLInputElement>("c-category").value.trim() || null;
   const color = $<HTMLInputElement>("c-color").value;
   const emblem = $<HTMLInputElement>("c-emblem").value.trim() || null;
@@ -1010,6 +1310,25 @@ $("t-alarm-key").onclick = () => {
   playAlarm(editAlarm);
 };
 
+/** The panel's own way of saying no — a browser alert() would break the illusion
+ *  that this is a machine, and it steals focus out of the panel. The message rides
+ *  on the panel itself and clears on the next interaction. */
+const elRackNag = el("div", "re-nag");
+elRackNag.id = "re-nag";
+elRackNag.hidden = true;
+elRackNag.setAttribute("role", "alert");
+function nagPanel(msg: string) {
+  elRackNag.textContent = msg;
+  elRackNag.hidden = false;
+  elRackNag.classList.remove("flash"); void elRackNag.offsetWidth; elRackNag.classList.add("flash");
+  if (!reducedMotion()) sndDenied();
+}
+
+// focus goes into the panel and comes back out to whatever opened it: the plate the
+// ✎ lives on is display:none'd while editing, so the browser would drop focus to
+// <body> and a keyboard user would be stranded at the top of the document.
+let rackReturnFocus: HTMLElement | null = null;
+
 function openTimerEditor(cardId: string, timer: Timer | null, opts: { forceMode?: TimerMode; startOnSave?: boolean } = {}) {
   timerEditorCardId = cardId;
   editingTimerId = timer?.id ?? null;
@@ -1022,14 +1341,30 @@ function openTimerEditor(cardId: string, timer: Timer | null, opts: { forceMode?
   editAlarm = timer?.alarmStyle ?? "chime";
   $("t-alarm-key").textContent = ALARM_LABEL[editAlarm];
   syncTimerModeUI();
+  elRackNag.hidden = true;
+  if (!elRackNag.parentElement) elRackEditor.appendChild(elRackNag);
+  rackReturnFocus = document.activeElement as HTMLElement | null;
   elRackArea.classList.add("editing");
   elRackEditor.hidden = false;
+  // focus the PANEL, not #t-name — focusing a text field pops the soft keyboard on
+  // a phone and changes how the machine feels to touch
+  elRackEditor.tabIndex = -1;
+  elRackEditor.focus();
   sndClick();
 }
 function closeTimerEditor() {
   elRackArea.classList.remove("editing");
   elRackEditor.hidden = true;
+  elRackNag.hidden = true;
   editingTimerId = null; timerEditorCardId = null; startOnSave = false;
+  // hand focus back — but SAVE re-renders the rack, so the node that opened us may
+  // be detached by now; fall back to whatever now stands in its place
+  const back = rackReturnFocus;
+  rackReturnFocus = null;
+  queueMicrotask(() => {
+    if (back?.isConnected) back.focus();
+    else (elTimerList.querySelector(".timer-row.add, .t-nm") as HTMLElement | null)?.focus();
+  });
 }
 let startOnSave = false;
 $("t-cancel").onclick = () => { sndClick(); closeTimerEditor(); };
@@ -1040,7 +1375,7 @@ $("t-save").onclick = async () => {
   // silently discarded as a stopwatch.
   const mode: TimerMode = targetMs > 0 ? "down" : editMode === "down" ? "down" : "up";
   const finalTarget = mode === "down" ? targetMs : null;
-  if (mode === "down" && !finalTarget) { alert("Set a countdown length greater than zero (h / m / s)."); return; }
+  if (mode === "down" && !finalTarget) { nagPanel("set a length first ・ h / m / s"); return; }
   const launch = startOnSave;
   sndClick();
   if (editingTimerId) {
@@ -1050,7 +1385,7 @@ $("t-save").onclick = async () => {
       const t = await dev.addTimer(timerEditorCardId, { name, mode, targetMs: finalTarget, alarmStyle: editAlarm });
       await dev.switchTimer(t.id); // make the new timer active
       if (launch) { await dev.press(); sndDome(); }   // launcher: start the quick countdown immediately
-    } catch (err) { alert(String(err instanceof Error ? err.message : err)); }
+    } catch (err) { nagPanel(String(err instanceof Error ? err.message : err)); return; }
   }
   closeTimerEditor();
   await renderAll();
@@ -1060,10 +1395,54 @@ $("t-save").onclick = async () => {
 function fillSettings() {
   $<HTMLInputElement>("sb-url").value = localStorage.getItem("tc_sb_url") ?? "";
   $<HTMLInputElement>("sb-key").value = localStorage.getItem("tc_sb_key") ?? "";
-  $("sb-status").textContent = localStorage.getItem("tc_sb_url")
+  const where = localStorage.getItem("tc_sb_url")
     ? "CURRENTLY SYNCING TO SUPABASE."
     : "CURRENTLY LOCAL ONLY (THIS BROWSER).";
+  // Say plainly how durable "local" is — "best-effort" storage can be evicted.
+  const durable = storagePersisted === null ? "" : storagePersisted
+    ? "  ・ STORAGE: PERSISTENT."
+    : "  ・ STORAGE: BEST-EFFORT — PRINT A BACKUP.";
+  $("sb-status").textContent = where + durable;
 }
+
+// Ask once for durable storage, and remember what the browser said (the sheet is
+// only filled when it prints, so this must not wait until then).
+let storagePersisted: boolean | null = null;
+navigator.storage?.persisted?.().then(async (p) => {
+  storagePersisted = p || await (navigator.storage.persist?.() ?? Promise.resolve(false));
+}).catch(() => {});
+
+// ── backup: export / import the whole dataset from the settings sheet ──
+$("sb-export").onclick = async () => {
+  sndClick();
+  try {
+    const dump = await dev.exportAll();
+    const url = URL.createObjectURL(new Blob([JSON.stringify(dump, null, 2)], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = `timecards-${isoDate(Date.now())}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    $("sb-status").textContent = `EXPORTED ${dump.cards.length} CARDS ・ ${dump.sessions.length} SESSIONS.`;
+  } catch (e) {
+    $("sb-status").textContent = "EXPORT FAILED — " + (e instanceof Error ? e.message : String(e));
+  }
+};
+$("sb-import-key").onclick = () => { sndClick(); $<HTMLInputElement>("sb-import").click(); };
+$<HTMLInputElement>("sb-import").onchange = async (e) => {
+  const file = (e.target as HTMLInputElement).files?.[0];
+  if (!file) return;
+  try {
+    const data = JSON.parse(await file.text());
+    const counts = await dev.importAll(data);
+    $("sb-status").textContent = `IMPORTED ${counts.cards} CARDS ・ ${counts.timers} TIMERS ・ ${counts.sessions} SESSIONS.`;
+    await renderAll();
+  } catch (err) {
+    // never an alert() — the message belongs on the paper the user is reading
+    $("sb-status").textContent = "IMPORT FAILED — " + (err instanceof Error ? err.message : String(err));
+  } finally {
+    ($("sb-import") as HTMLInputElement).value = "";   // let the same file be picked again
+  }
+};
 $("sb-clear").onclick = () => {
   localStorage.removeItem("tc_sb_url");
   localStorage.removeItem("tc_sb_key");
@@ -1113,9 +1492,19 @@ function feedStubBack(done: () => void) {
 }
 async function printPaper(kind: PaperKind) {
   printBusy = true;
-  if (kind === "report") await renderStats();     // freeze the data onto the paper NOW
-  else if (kind === "detailed") { window.scrollTo({ top: 0 }); await renderDetailed(); }
-  else fillSettings();
+  try {
+    if (kind === "report") await renderStats();     // freeze the data onto the paper NOW
+    else if (kind === "detailed") { window.scrollTo({ top: 0 }); await renderDetailed(); }
+    else fillSettings();
+  } catch (e) {
+    // A storage failure while composing the paper must not leave the printer jammed:
+    // printBusy stuck true blocks every print key — including SETUP, the only way
+    // back to the sync settings that may have caused it.
+    console.error("print failed", e);
+    printBusy = false;
+    elPrinter.classList.remove("printing", "paper-is-out");
+    return;
+  }
   elPrinter.classList.add("printing", "paper-is-out");
   const el = paperEl(kind);
   el.hidden = false;
@@ -1394,26 +1783,52 @@ async function renderStats() {
   $("s-loyalty").textContent = `STREAK ${st.current} DAYS 🔥 ・ BEST ${st.longest}`;
 }
 
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
-}
-
 // ── device tick: re-render 10×/sec so a running/finished readout advances ──
 // (a printed report is a frozen snapshot — it never re-renders; the device below
 // the paper keeps ticking, as a real appliance would). This handles the countdown
 // seconds and all state; the count-up HUNDREDTHS are driven by rAF below.
-setInterval(async () => {
-  const v = await dev.view();
-  if (v.state === "running" || v.state === "finished") await renderDevice();
+//
+// It reads the CACHED state rather than querying storage: asking "is anything
+// running?" cost three IndexedDB transactions, and renderDevice then asked the same
+// question again — 60 transactions/second while running, and 30/second forever on an
+// idle page left open all day. Every action ends in renderDevice/renderAll, so the
+// cache can only be stale in one direction: running → finished, which is polled.
+setInterval(() => {
+  if (lastState !== "running" && lastState !== "finished") return;   // idle: stay quiet
+  renderDevice();
 }, 100);
+
+// Any real gesture is a chance to un-suspend the audio hardware (browsers only let
+// us resume from one). Capture phase so a handler that stops propagation can't hide it.
+document.addEventListener("pointerdown", () => { audioCtx?.resume().catch(() => {}); }, { capture: true });
+
+// Coming back to the tab: hidden tabs clamp setInterval to ~1/sec, so a countdown
+// that ended while away should be shown — and rung — the instant we're looked at again.
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) return;
+  audioCtx?.resume().catch(() => {});
+  renderDevice();
+});
 
 // ── the stopwatch's hundredths, at display refresh rate ──
 // Recompute elapsed with the engine's exact formula from the cached live session,
-// so the centiseconds run smoothly instead of jumping in ~10-step increments.
+// so the centiseconds run smoothly instead of jumping in ~10-step increments. The
+// loop parks itself when no stopwatch is running; renderDevice restarts it.
 function readoutFrame() {
-  if (liveUpSession) setReadout(fmtDuration(elapsed(liveUpSession, Date.now()), true));
-  requestAnimationFrame(readoutFrame);
+  if (!liveUpSession) { rafId = 0; return; }
+  setReadout(fmtDuration(elapsed(liveUpSession, Date.now()), true));
+  rafId = requestAnimationFrame(readoutFrame);
 }
-requestAnimationFrame(readoutFrame);
 
-await renderAll();
+// First paint. If storage itself is unavailable (private browsing, a blocked
+// IndexedDB, an evicted origin) the app would otherwise sit as a half-built machine
+// with no explanation — say so on the LCD, where the user is already looking.
+try {
+  await renderAll();
+} catch (e) {
+  console.error("timecards: storage unavailable", e);
+  elCardName.textContent = "— NO CARD —"; elCardName.classList.add("empty");
+  setReadout("--:--");
+  elSub.textContent = "storage unavailable ・ private browsing?";
+  elBig.disabled = true; elFinish.disabled = elReset.disabled = true;
+}

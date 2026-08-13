@@ -19,7 +19,7 @@ Sources of truth: `guidance/TIMER.md`, `guidance/INTERFACES.md`, `guidance/ARCHI
 - Eject / empty state (`Device.eject`): EJECT key blanks LCD, clears rack, big button no-ops.
 - Big button start/pause/resume; glyph and sub-line follow.
 - Two modes with correct formats: stopwatch hundredths (`00:00.00`), countdown MM:SS from preset.
-- Multiple timers per card, 10 cap (`MAX_TIMERS`), rack rows, `.rack-count`.
+- Multiple timers per card, capped at `MAX_TIMERS` (10 at review time; 4 today), rack rows, `.rack-count`.
 - Switching the active timer (`Device.switchTimer`): lit LED plus full readout re-drive.
 - Timers travel with the card on insert/eject.
 - Card deck browsing: pockets, per-card color, timer chips, total time.

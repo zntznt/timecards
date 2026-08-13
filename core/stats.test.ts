@@ -84,4 +84,46 @@ test("recent: newest first, annotated, limited", () => {
   assert.equal(r[1].session.id, "mid");
 });
 
+// ── DST ──────────────────────────────────────────────────────────
+// A local calendar day is 23 or 25 hours long twice a year, so walking days by
+// ±86400000 ms skips or repeats one right at the boundary. These assert the
+// invariant (consecutive, gap-free calendar days) so they're meaningful in any
+// timezone; run `TZ=America/New_York node core/stats.test.ts` to exercise the real
+// transitions — 2026-03-08 springs forward, 2026-11-01 falls back.
+function nextDayKey(key: string): string {
+  const [y, m, d] = key.split("-").map(Number);
+  return S.dayKey(new Date(y, m - 1, d + 1, 12).getTime());
+}
+const DST_EDGES = [
+  new Date(2026, 2, 9, 0, 30).getTime(),   // the morning after spring-forward
+  new Date(2026, 10, 2, 0, 30).getTime(),  // the morning after fall-back
+];
+
+test("byDay walks calendar days across a DST change without skipping one", () => {
+  for (const at of DST_EDGES) {
+    const days = S.byDay([], at, 5);
+    assert.equal(days.length, 5);
+    assert.equal(days[4].day, S.dayKey(at), "the last bucket is today");
+    for (let i = 1; i < days.length; i++) {
+      assert.equal(days[i].day, nextDayKey(days[i - 1].day),
+        `chart jumped from ${days[i - 1].day} to ${days[i].day}`);
+    }
+  }
+});
+
+test("streaks count through a DST change", () => {
+  for (const at of DST_EDGES) {
+    // three consecutive calendar days ending today, one session each
+    const days = [0, 1, 2].map(n => new Date(new Date(at).getFullYear(), new Date(at).getMonth(), new Date(at).getDate() - n, 12).getTime());
+    const sessions: Session[] = days.map((startedAt, i) => ({
+      id: `d${i}`, cardId: "hobby", timerId: "t1", mode: "up", targetMs: null,
+      startedAt, endedAt: startedAt + 600_000, pausedMs: 0, pausedAt: null,
+    }));
+    const st = S.streaks(sessions, at);
+    assert.equal(st.activeDays, 3);
+    assert.equal(st.current, 3, "the DST day must not break the run");
+    assert.equal(st.longest, 3);
+  }
+});
+
 console.log(`\n${passed} stats checks passed.`);

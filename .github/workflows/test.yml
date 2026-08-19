@@ -1,0 +1,54 @@
+# CI for timecards. Deliberately tiny, like the project: there are no dependencies,
+# so there is no install step — `npm test` runs the .ts files directly on Node 22+.
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # The core self-checks, run under several timezones on purpose.
+  #
+  # A "day" here is a LOCAL calendar day (streaks, the 14-day chart, a card's
+  # deadline count), and a local day is 23 or 25 hours long twice a year. Day math
+  # that looks right in UTC — which has no DST at all — can silently skip or repeat
+  # a calendar day everywhere else. So: UTC as the baseline, New York for an ordinary
+  # 1-hour transition, and Lord Howe, whose DST shift is 30 minutes.
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
+        tz: ['UTC', 'America/New_York', 'Australia/Lord_Howe']
+    name: test (node ${{ matrix.node }}, TZ=${{ matrix.tz }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm test
+        env:
+          TZ: ${{ matrix.tz }}
+
+  # docs/ is the PUBLISHED web app (GitHub Pages serves it straight from the repo),
+  # generated from web/ by web/build.ts. Nothing regenerates it on the server, so a
+  # commit that edits web/ without rebuilding ships a stale page to real users.
+  # Rebuild here and fail if the result differs from what was committed.
+  build:
+    runs-on: ubuntu-latest
+    name: docs/ is up to date
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node web/build.ts
+      - name: docs/ must match a fresh build of web/
+        run: |
+          if ! git diff --exit-code -- docs/; then
+            echo ""
+            echo "::error::docs/ is out of date. Run 'node web/build.ts' and commit the result."
+            exit 1
+          fi

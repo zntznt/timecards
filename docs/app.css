@@ -27,11 +27,14 @@
   --lcd-ghost: #8ea085;   /* unlit segment ghost */
   --vermilion: #e8472a;   /* THE accent — only when something is LIVE */
   --vermilion-lo:#b8351d;
-  /* LIT text ON the LCD. --vermilion-lo is the chassis accent and reads at only
-     2.4:1 against the olive panel — DIMMER than the same line unlit, so the
-     sub-line got harder to read exactly when the machine started working.
-     Same hue family, deep enough to survive daylight (4.05:1). */
-  --lcd-live:   #7a2312;
+  /* LIT text ON the LCD. --vermilion-lo is the chassis accent and was DIMMER than
+     the same line unlit, so the sub-line got harder to read exactly when the
+     machine started working. This value is MEASURED, not computed: the panel is a
+     card-tinted gradient, so the ground under the text is darker than --lcd-bg and
+     arithmetic against that token overstates the result. Rendered against the real
+     gradient this reads 4.99:1 on the sub-line and 4.74:1 on the lamps — AA at the
+     10-12px these are actually set in. */
+  --lcd-live:   #451205;
   --olive:     #6f7457;
   /* the printer's own scope (charcoal + beige, amber accent) */
   --pr-body:   #4b4a46;
@@ -350,7 +353,9 @@ button { font-family: inherit; }
 .lcd-ticks { display: flex; gap: 8px; margin-top: 9px; font-size: 10px; letter-spacing: .08em;
   color: var(--lcd-dark); justify-content: center; flex-wrap: wrap;
   font-weight: 600; }
-.lcd-ticks span { opacity: .7; }
+/* .9, not .7: the lamp row sits on the DARKEST band of the panel gradient, where
+   .7 rendered at 2.5:1 — the least legible text on the machine. */
+.lcd-ticks span { opacity: .9; }
 .lcd-ticks span.on { opacity: 1; color: var(--lcd-live); }
 /* the LOCK lamp: amber when engaged (not vermilion — that's for LIVE) */
 #lamp-lock.on { color: #6a3505; }

@@ -8,19 +8,30 @@ export const DEFAULT_ALARM: AlarmStyle = "chime";
 
 const DAY_MS = 86_400_000;
 
+/** Local midnight for an epoch ms. Deadlines are STORED as local midnights (the CLI
+ *  and the web date input both build them that way), so a day-count has to compare
+ *  midnight-to-midnight. Comparing raw instants instead made the readout tick over
+ *  at whatever time of day the deadline was set, and drift by one whole day for any
+ *  span crossing a DST change (a 23- or 25-hour day breaks fixed-ms division). */
+function midnight(ms: number): number {
+  const d = new Date(ms);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
 /** Whole-day count for a card's deadline. Returns null if the card has none.
  *  'until' -> days remaining (0 once the date passes, passed=true).
  *  'since' -> days elapsed from the date (a streak / "day N"). */
 export function dayCountOf(card: Card | null, now: number): DayCount | null {
   if (!card || card.deadline == null) return null;
   const kind = card.deadlineKind ?? "until";
-  const diffDays = Math.ceil((card.deadline - now) / DAY_MS); // +ve = future
+  // Whole calendar days between the two midnights. Round, not ceil/floor: the
+  // quotient is 0.958 or 1.042 rather than exactly 1 across a DST boundary.
+  const diffDays = Math.round((midnight(card.deadline) - midnight(now)) / DAY_MS); // +ve = future
   if (kind === "until") {
     return { days: Math.max(0, diffDays), kind, passed: diffDays <= 0 };
   }
-  // since: days elapsed from the date (floor so "today" = 0, tomorrow = 1)
-  const elapsedDays = Math.max(0, Math.floor((now - card.deadline) / DAY_MS));
-  return { days: elapsedDays, kind, passed: false };
+  // since: days elapsed from the date ("today" = 0, tomorrow = 1)
+  return { days: Math.max(0, -diffDays), kind, passed: false };
 }
 
 /** Elapsed run time (ms), excluding paused stretches. `now` = current epoch ms.

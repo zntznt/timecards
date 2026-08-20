@@ -14,6 +14,17 @@ export function dayKey(ms: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** Step `n` CALENDAR days from an epoch ms, in local time. Integer ms in, integer
+ *  ms out. Never step by ±DAY_MS to walk days: a DST day is 23 or 25 hours long, so
+ *  fixed-millisecond arithmetic skips or repeats a calendar day right at the
+ *  boundary — spring-forward day disappeared from the 14-day chart entirely, and
+ *  streaks broke across it. Date normalizes day overflow (day 0 = last month's
+ *  last day), so this is safe across month and year ends. */
+export function addDays(ms: number, n: number): number {
+  const d = new Date(ms);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n, 12, 0, 0, 0).getTime();
+}
+
 /** Total tracked ms across the given sessions. */
 export function totalMs(sessions: Session[], now: number): number {
   return sessions.reduce((sum, s) => sum + elapsed(s, now), 0);
@@ -54,7 +65,7 @@ export function byDay(sessions: Session[], now: number, days = 14): DayBucket[] 
   }
   const out: DayBucket[] = [];
   for (let i = days - 1; i >= 0; i--) {
-    const k = dayKey(now - i * DAY_MS);
+    const k = dayKey(addDays(now, -i));
     out.push({ day: k, ms: totals.get(k) ?? 0 });
   }
   return out;
@@ -80,9 +91,9 @@ export function streaks(sessions: Session[], now: number): Streaks {
 
   // current: count back from today; if today is empty but yesterday active, start there.
   let cursor = dayKey(now);
-  if (!active.has(cursor)) cursor = dayKey(now - DAY_MS); // grace: yesterday still counts
+  if (!active.has(cursor)) cursor = dayKey(addDays(now, -1)); // grace: yesterday still counts
   let current = 0;
-  while (active.has(cursor)) { current++; cursor = dayKey(parseDay(cursor) - DAY_MS); }
+  while (active.has(cursor)) { current++; cursor = dayKey(addDays(parseDay(cursor), -1)); }
 
   return { current, longest, activeDays: active.size };
 }

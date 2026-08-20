@@ -100,7 +100,7 @@ await test("a card holds multiple timers up to the cap", async () => {
   // fill to the cap
   while ((await dev.listTimers(card.id)).length < MAX_TIMERS) await dev.addTimer(card.id, {});
   assert.equal((await dev.listTimers(card.id)).length, MAX_TIMERS);
-  await assert.rejects(() => dev.addTimer(card.id, {}), /maximum/);  // 11th rejected
+  await assert.rejects(() => dev.addTimer(card.id, {}), /maximum/);  // one past MAX_TIMERS is rejected
 });
 
 await test("switching timers SUSPENDS one and RESUMES the other where it left off", async () => {
@@ -265,7 +265,7 @@ await test("lock freezes setup (stop/eject/swap/switch) but the big button stays
   const a = await dev.createCard("A");
   const b = await dev.createCard("B");
   await dev.slot(a.id);
-  const t2 = await dev.addTimer(a.id, "Second");
+  const t2 = await dev.addTimer(a.id, { name: "Second" });
   await dev.press(); tick(5_000);
   await dev.lock(true);
   // the big button IS live while locked: press pauses the running session
@@ -280,6 +280,34 @@ await test("lock freezes setup (stop/eject/swap/switch) but the big button stays
   await dev.lock(false);
   await dev.slot(b.id);
   assert.equal((await dev.view()).card?.id, "b");                          // unlock frees it
+});
+
+await test("a LOCKED finished countdown can still be repeated by the big button", async () => {
+  // The lock freezes stop/reset/finish, so if repeat were frozen too the only way
+  // out of a ringing countdown would be the lock latch itself.
+  const { dev, tick } = harness();
+  const card = await dev.createCard("Focus");
+  const t = (await dev.listTimers(card.id))[0];
+  await dev.configureTimer(t.id, { mode: "down", targetMs: 10_000 });
+  await dev.slot(card.id);
+  await dev.press(); tick(10_000);
+  assert.equal((await dev.view()).state, "finished");
+  await dev.lock(true);
+  const v = await dev.press();                               // press on finished = repeat
+  assert.equal(v.state, "running", "the repeat started a fresh round");
+  assert.equal((await dev.listSessions(card.id)).length, 1, "the finished round was banked");
+  assert.equal(v.locked, true, "and the lock is still on");
+});
+
+await test("deleting a LOCKED slotted card clears the slot instead of orphaning it", async () => {
+  const { dev, store } = harness();
+  const card = await dev.createCard("Doomed");
+  await dev.slot(card.id);
+  await dev.lock(true);
+  await dev.deleteCard(card.id);
+  assert.equal(store.timers.size, 0, "its timers went with it");
+  assert.equal((await dev.view()).card, null, "the slot does not point at a deleted card");
+  assert.equal((await dev.view()).state, "empty");
 });
 
 await test("NFC slot-by-tag works once registered", async () => {
@@ -339,6 +367,27 @@ await test("import merges (upsert) into an existing store without dupes", async 
   const dump = await dev.exportAll();
   await dev.importAll(dump);                               // re-import same data
   assert.equal((await dev.listCards()).length, 1);         // no duplicate card
+});
+
+await test("pure: dayCountOf counts whole calendar days, both directions", async () => {
+  const card = (deadline: number, kind: "until" | "since") =>
+    ({ id: "c", name: "C", category: null, color: null, nfcUid: null, createdAt: 0, deadline, deadlineKind: kind }) as Card;
+  const day = (y: number, m: number, d: number, h = 0) => new Date(y, m - 1, d, h).getTime();
+  const now = day(2026, 3, 5, 14);                     // an afternoon, mid-day
+  assert.deepEqual(T.dayCountOf(card(day(2026, 3, 5), "until"), now), { days: 0, kind: "until", passed: true });
+  assert.deepEqual(T.dayCountOf(card(day(2026, 3, 6), "until"), now), { days: 1, kind: "until", passed: false });
+  assert.deepEqual(T.dayCountOf(card(day(2026, 4, 16), "until"), now), { days: 42, kind: "until", passed: false });
+  assert.deepEqual(T.dayCountOf(card(day(2026, 3, 1), "until"), now), { days: 0, kind: "until", passed: true });
+  assert.deepEqual(T.dayCountOf(card(day(2026, 3, 5), "since"), now), { days: 0, kind: "since", passed: false });
+  assert.deepEqual(T.dayCountOf(card(day(2026, 2, 17), "since"), now), { days: 16, kind: "since", passed: false });
+  assert.equal(T.dayCountOf(null, now), null);
+  // The count must not flip partway through the day, and must not lose a day to a
+  // DST change inside the span. (TZ=America/New_York exercises 2026-03-08.)
+  for (const hour of [0, 1, 2, 3, 12, 23]) {
+    const at = day(2026, 3, 9, hour);
+    assert.equal(T.dayCountOf(card(day(2026, 3, 5), "since"), at)!.days, 4, `since drifted at ${hour}:00`);
+    assert.equal(T.dayCountOf(card(day(2026, 3, 13), "until"), at)!.days, 4, `until drifted at ${hour}:00`);
+  }
 });
 
 console.log(`\n${passed} core checks passed.`);

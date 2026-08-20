@@ -67,7 +67,7 @@ create table cards (
   deadline      bigint,
   deadline_kind text
 );
-create table timers (                  -- a card owns up to 10 of these
+create table timers (                  -- a card owns up to MAX_TIMERS of these
   id          text primary key,
   card_id     text not null references cards(id) on delete cascade,
   name        text not null,

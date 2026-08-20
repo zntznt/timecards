@@ -12,7 +12,20 @@
   <!-- Saira Condensed = silkscreen labels. Share Tech Mono = LCD digits.
        Zen Kaku Gothic = card titles + JP flavor. VT323 = the printer's dot-matrix. -->
   <!-- Klee One = the index cards' pencil handwriting (Japanese textbook hand). -->
-  <link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700&family=Share+Tech+Mono&family=Zen+Kaku+Gothic+New:wght@500;700;900&family=VT323&family=Klee+One:wght@400;600&family=Oswald:wght@500;700&family=Dela+Gothic+One&display=swap" rel="stylesheet" />
+  <!-- Only what the FIRST paint needs blocks here. Oswald ships weight 700 only —
+       500 is declared nowhere (app.css:101, 111). -->
+  <link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;600;700&family=Share+Tech+Mono&family=Zen+Kaku+Gothic+New:wght@500;700;900&family=VT323&family=Oswald:wght@700&display=swap" rel="stylesheet" />
+  <!-- Dela Gothic One draws ONE fixed string (the badge's タイムカード ・ TC-580), but
+       it is a CJK face — the full family costs ~115KB of @font-face CSS. text= subsets
+       it to those 14 glyphs. It MUST stay its own request: text= applies to every
+       family in the request it appears on, so folding it into the line above would
+       subset Saira, Zen Kaku and the rest to these glyphs too.
+       IF YOU EDIT THE BADGE, edit this text= to match or the new glyphs fall back. -->
+  <link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&text=%E3%82%BF%E3%82%A4%E3%83%A0%E3%82%AB%E3%83%BC%E3%83%89%20%E3%83%BBTC-580&display=swap" rel="stylesheet" />
+  <!-- Klee One is used by exactly one rule (.index-card), inside a <dialog> that is
+       closed on load — so it must not block first paint. media=print loads it without
+       blocking; onload promotes it to all. -->
+  <link href="https://fonts.googleapis.com/css2?family=Klee+One:wght@400;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
   <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
@@ -85,6 +98,23 @@
             <button type="button" id="sb-clear" class="p-btn">USE LOCAL ONLY</button>
             <button type="submit" class="p-btn accent">SAVE &amp; RELOAD</button>
           </div>
+
+          <!-- BACKUP. The browser's storage is best-effort: Safari clears an unvisited
+               origin after 7 days, and any "clear site data" takes the lot. The engine
+               has had exportAll/importAll since day one; only the CLI could reach them. -->
+          <div class="p-head p-head--sub">
+            <div class="p-title">BACKUP</div>
+            <div class="p-sub">書き出し ・ 読み込み</div>
+          </div>
+          <p class="p-note">
+            A backup is one JSON file holding every card, timer and session. Import
+            merges by id, so restoring never duplicates what is already here.
+          </p>
+          <div class="p-nav">
+            <button type="button" id="sb-export" class="p-btn">EXPORT ・ SAVE FILE</button>
+            <button type="button" id="sb-import-key" class="p-btn">IMPORT ・ LOAD FILE</button>
+          </div>
+          <input id="sb-import" type="file" accept="application/json,.json" hidden />
           <button type="button" class="p-end" data-cut title="tear the sheet off">— ✂ — — — — — — — — — — — —</button>
         </form>
       </div>
@@ -170,9 +200,14 @@
             <span id="readout" class="live">00:00</span>
           </div>
           <div id="sub" class="lcd-sub">slot a card to begin</div>
-          <div class="lcd-ticks">
+          <!-- The lamp row reads out as "●RUN ○PAUSE ○DONE ♪CHIME ○LOCK", which is
+               noise in a screen reader; #lcd-say carries the same information as a
+               sentence instead. The readout itself stays readable — it is the only
+               place the current time exists. -->
+          <div class="lcd-ticks" aria-hidden="true">
             <span id="lamp-run">●RUN</span><span id="lamp-pause">○PAUSE</span><span id="lamp-done">○DONE</span><span id="lamp-alarm">♪ALARM</span><span id="lamp-lock">🔒LOCK</span>
           </div>
+          <p id="lcd-say" class="sr-only" role="status" aria-live="polite"></p>
         </div>
       </div>
 
@@ -182,7 +217,9 @@
           <span class="thumb-rest" aria-hidden="true"></span>
         </div>
         <div class="bigbtn-wrap">
-          <button id="big-button" class="bigbtn" aria-label="start, pause, or resume">
+          <!-- aria-label is set from the word under the dome (app.ts), so the name
+               always matches what the next press will actually do -->
+          <button id="big-button" class="bigbtn">
             <span id="big-label" class="glyph">●</span>
           </button>
           <span id="big-word" class="bigbtn-label">START</span>

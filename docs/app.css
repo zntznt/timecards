@@ -42,6 +42,9 @@
      the digits with it, changing the whole panel's character to fix one line.
      Measured 4.57:1 against the real gradient. */
   --lcd-sub:    #252d20;
+  /* The UNLIT lamp row. It sits on the panel's darkest band, and unlike the other
+     labels full opacity alone only reaches 3.64:1, so it needs its own value. */
+  --lcd-lamp:   #222a20;
   --olive:     #6f7457;
   /* the printer's own scope (charcoal + beige, amber accent) */
   --pr-body:   #4b4a46;
@@ -327,15 +330,18 @@ button { font-family: inherit; }
 .lcd-right { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; min-width: 0; flex: 0 1 auto; }
 /* TODAY — this card's tracked time today, a real segment counter */
 .lcd-today { font-family: "Share Tech Mono", monospace; font-size: 10px; letter-spacing: .06em;
-  color: var(--lcd-dark); opacity: .9; white-space: nowrap; }
+  color: var(--lcd-dark); opacity: 1; white-space: nowrap; }
 .lcd-today:empty { display: none; }
-.lcd-stars { font-size: 9px; letter-spacing: 2px; color: var(--lcd-dark); opacity: .9; white-space: nowrap; }
+.lcd-stars { font-size: 9px; letter-spacing: 2px; color: var(--lcd-dark); opacity: 1; white-space: nowrap; }
 .lcd-stars:empty { display: none; }
 .lcd-card { font-family: "Zen Kaku Gothic New", sans-serif; font-weight: 700; font-size: 15px;
   color: var(--lcd-dark); letter-spacing: .02em; min-width: 0; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; }
-.lcd-card.empty { opacity: .55; font-weight: 500; }
-.lcd-mode { font-size: 11px; letter-spacing: .18em; color: var(--lcd-dark); opacity: .75;
+/* The empty machine's own headline ("— NO CARD —") — the first text a new visitor
+   reads. At .55 it rendered 2.31:1, the least legible thing in the whole app. The
+   lighter WEIGHT still reads as "nothing loaded" without hiding the words. */
+.lcd-card.empty { opacity: 1; font-weight: 500; }
+.lcd-mode { font-size: 11px; letter-spacing: .18em; color: var(--lcd-dark); opacity: 1;
   font-weight: 600; text-transform: uppercase; flex: 0 1 auto; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; }
 .lcd-mode b { color: var(--lcd-live); }
@@ -362,8 +368,11 @@ button { font-family: inherit; }
   font-weight: 600; }
 /* .9, not .7: the lamp row sits on the DARKEST band of the panel gradient, where
    .7 rendered at 2.5:1 — the least legible text on the machine. */
-.lcd-ticks span { opacity: .9; }
+.lcd-ticks span { opacity: 1; color: var(--lcd-lamp); }
 .lcd-ticks span.on { opacity: 1; color: var(--lcd-live); }
+/* NOTE: the opacity dimming that used to sit on .lcd-mode/.lcd-today/.lcd-stars and
+   this row was carrying visual hierarchy, but it put the text under AA. Hierarchy is
+   now carried by size and weight alone, which costs nothing in legibility. */
 /* the LOCK lamp: amber when engaged (not vermilion — that's for LIVE) */
 #lamp-lock.on { color: #6a3505; }
 /* poking a locked control flashes the LOCK lamp bright amber */

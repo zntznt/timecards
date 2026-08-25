@@ -35,6 +35,13 @@
      gradient this reads 4.99:1 on the sub-line and 4.74:1 on the lamps — AA at the
      10-12px these are actually set in. */
   --lcd-live:   #451205;
+  /* The idle sub-line only. It sits on the panel's darker lower band, where the
+     shared --lcd-dark reads 3.4:1 — the weakest text left on the LCD once the LIT
+     states were fixed. A dedicated token keeps the fix surgical: darkening
+     --lcd-dark instead would have dragged the card name, TODAY, the mode line and
+     the digits with it, changing the whole panel's character to fix one line.
+     Measured 4.57:1 against the real gradient. */
+  --lcd-sub:    #252d20;
   --olive:     #6f7457;
   /* the printer's own scope (charcoal + beige, amber accent) */
   --pr-body:   #4b4a46;
@@ -347,7 +354,7 @@ button { font-family: inherit; }
 .readout .ghost { position: absolute; inset: 0; color: var(--lcd-ghost); opacity: .45; z-index: 0; }
 .readout .live { position: relative; z-index: 1; }
 .lcd-sub { text-align: center; font-family: "Saira Condensed", sans-serif; font-size: 12px;
-  letter-spacing: .14em; color: var(--lcd-dark); opacity: .9; margin-top: 5px; font-weight: 600;
+  letter-spacing: .14em; color: var(--lcd-sub); opacity: 1; margin-top: 5px; font-weight: 600;
   text-transform: uppercase; min-height: 15px; }
 #device.running .lcd-sub, #device.finished .lcd-sub { color: var(--lcd-live); opacity: 1; }
 .lcd-ticks { display: flex; gap: 8px; margin-top: 9px; font-size: 10px; letter-spacing: .08em;

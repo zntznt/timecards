@@ -21,8 +21,11 @@
   --metal-hi:  #d8d5cc;
   --ink:       #2c2a24;   /* silkscreen dark */
   --ink-soft:  #6b6655;
-  --lcd-bg:    #99a98e;   /* greyish teal-green LCD */
-  --lcd-bg-lo: #8a9b80;
+  /* Lightened together with the oklch block under #device, so browsers WITHOUT
+     relative-colour syntax land on the same backlight. Raising these is what buys
+     the headroom for a bright LIT red; the old #99a98e forced an oxblood. */
+  --lcd-bg:    #a9b99e;   /* greyish teal-green LCD */
+  --lcd-bg-lo: #96a78c;
   --lcd-dark:  #2f3a2c;   /* live digits */
   --lcd-ghost: #8ea085;   /* unlit segment ghost */
   --vermilion: #e8472a;   /* THE accent — only when something is LIVE */
@@ -31,20 +34,14 @@
      the same line unlit, so the sub-line got harder to read exactly when the
      machine started working. This value is MEASURED, not computed: the panel is a
      card-tinted gradient, so the ground under the text is darker than --lcd-bg and
-     arithmetic against that token overstates the result. Rendered against the real
-     gradient this reads 4.99:1 on the sub-line and 4.74:1 on the lamps — AA at the
-     10-12px these are actually set in. */
-  --lcd-live:   #451205;
-  /* The idle sub-line only. It sits on the panel's darker lower band, where the
-     shared --lcd-dark reads 3.4:1 — the weakest text left on the LCD once the LIT
-     states were fixed. A dedicated token keeps the fix surgical: darkening
-     --lcd-dark instead would have dragged the card name, TODAY, the mode line and
-     the digits with it, changing the whole panel's character to fix one line.
-     Measured 4.57:1 against the real gradient. */
-  --lcd-sub:    #252d20;
-  /* The UNLIT lamp row. It sits on the panel's darkest band, and unlike the other
-     labels full opacity alone only reaches 3.64:1, so it needs its own value. */
-  --lcd-lamp:   #222a20;
+     arithmetic against that token overstates the result. MEASURED against the worst
+     card tint, not the default one — a red card tints the panel toward the text's
+     own hue. Brightened from #451205 once the backlight was lifted (see the oklch
+     block under #device); it could not go here on the old darker panel. */
+  --lcd-live:   #691f0d;
+  /* --lcd-sub and --lcd-lamp used to live here: two darker inks compensating for a
+     panel that was too dark under the sub-line and the lamp row. Lifting the
+     backlight removed the need for both, so the LCD is back to ONE ink colour. */
   --olive:     #6f7457;
   /* the printer's own scope (charcoal + beige, amber accent) */
   --pr-body:   #4b4a46;
@@ -221,8 +218,13 @@ button { font-family: inherit; }
   border: 1px solid var(--shell-edge);
 }
 @supports (color: oklch(from red l c h)) {
-  #device { --accent-lcd: oklch(from var(--card-accent, var(--lcd-bg)) 0.70 min(c, 0.085) h);
-            --accent-lcd-lo: oklch(from var(--card-accent, var(--lcd-bg)) 0.63 min(c, 0.085) h); }
+  /* 0.78/0.71, not 0.70/0.63. oklch L is PERCEPTUAL lightness, not WCAG relative
+     luminance: at equal L a red-hued panel carries far less luminance than a green
+     one (the coefficients weight green .7152 against red .2126), so pinning L alone
+     still let a red card darken the ground under the text. Lifting the backlight is
+     what lets the LIT red stay bright instead of going oxblood to compensate. */
+  #device { --accent-lcd: oklch(from var(--card-accent, var(--lcd-bg)) 0.78 min(c, 0.085) h);
+            --accent-lcd-lo: oklch(from var(--card-accent, var(--lcd-bg)) 0.71 min(c, 0.085) h); }
 }
 .screw { position: absolute; width: 11px; height: 11px; border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, #d9d2bd, #9c916f);
@@ -360,7 +362,7 @@ button { font-family: inherit; }
 .readout .ghost { position: absolute; inset: 0; color: var(--lcd-ghost); opacity: .45; z-index: 0; }
 .readout .live { position: relative; z-index: 1; }
 .lcd-sub { text-align: center; font-family: "Saira Condensed", sans-serif; font-size: 12px;
-  letter-spacing: .14em; color: var(--lcd-sub); opacity: 1; margin-top: 5px; font-weight: 600;
+  letter-spacing: .14em; color: var(--lcd-dark); opacity: 1; margin-top: 5px; font-weight: 600;
   text-transform: uppercase; min-height: 15px; }
 #device.running .lcd-sub, #device.finished .lcd-sub { color: var(--lcd-live); opacity: 1; }
 .lcd-ticks { display: flex; gap: 8px; margin-top: 9px; font-size: 10px; letter-spacing: .08em;
@@ -368,7 +370,7 @@ button { font-family: inherit; }
   font-weight: 600; }
 /* .9, not .7: the lamp row sits on the DARKEST band of the panel gradient, where
    .7 rendered at 2.5:1 — the least legible text on the machine. */
-.lcd-ticks span { opacity: 1; color: var(--lcd-lamp); }
+.lcd-ticks span { opacity: 1; }
 .lcd-ticks span.on { opacity: 1; color: var(--lcd-live); }
 /* NOTE: the opacity dimming that used to sit on .lcd-mode/.lcd-today/.lcd-stars and
    this row was carrying visual hierarchy, but it put the text under AA. Hierarchy is
